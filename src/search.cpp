@@ -62,9 +62,7 @@ namespace {
   // Different node types, used as a template parameter
   enum NodeType { NonPV, PV };
 
-  // Sizes and phases of the skip-blocks, used for distributing search depths across the threads
-  const int skipSize[]  = { 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4 };
-  const int skipPhase[] = { 0, 1, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7 };
+  //playout
 
   // Razoring and futility margin based on depth
   const int razor_margin = 600;
@@ -239,22 +237,7 @@ void MainThread::search() {
 
   // Check if there are threads with a better score than main thread
   Thread* bestThread = this;
-  if (    Options["MultiPV"] == 1
-      && !Limits.depth
-      && !Skill(Options["Skill Level"]).enabled()
-      &&  rootMoves[0].pv[0] != MOVE_NONE)
-  {
-      for (Thread* th : Threads)
-      {
-          Depth depthDiff = th->completedDepth - bestThread->completedDepth;
-          Value scoreDiff = th->rootMoves[0].score - bestThread->rootMoves[0].score;
-
-          // Select the thread with the best score, always if it is a mate
-          if (    scoreDiff > 0
-              && (depthDiff >= 0 || th->rootMoves[0].score >= VALUE_MATE_IN_MAX_PLY))
-              bestThread = th;
-      }
-  }
+  //playout
 
   previousScore = bestThread->rootMoves[0].score;
 
@@ -313,14 +296,11 @@ void Thread::search() {
          && !(Limits.depth && mainThread && rootDepth / ONE_PLY > Limits.depth))
   {
       // Distribute search depths across the threads
-      if (idx)
-      {
-          int i = (idx - 1) % 20;
-          if (((rootDepth / ONE_PLY + rootPos.game_ply() + skipPhase[i]) / skipSize[i]) % 2)
-              continue;
-      }
-
-      // Age out PV variability metric
+	  //playout begin
+      if (!mainThread  && rootDepth <= Threads.main()->completedDepth - 9 * ONE_PLY)
+          continue;
+      //playout end
+	  // Age out PV variability metric
       if (mainThread)
           mainThread->bestMoveChanges *= 0.505, mainThread->failedLow = false;
 
@@ -410,7 +390,7 @@ void Thread::search() {
          lastBestMove = rootMoves[0].pv[0];
          lastBestMoveDepth = rootDepth;
       }
-
+	  playout(lastBestMove, ss); //playout
       // Have we found a "mate in x"?
       if (   Limits.mate
           && bestValue >= VALUE_MATE_IN_MAX_PLY
@@ -476,6 +456,20 @@ void Thread::search() {
                 skill.best ? skill.best : skill.pick_best(multiPV)));
 }
 
+void Thread::playout(Move playMove, Stack* ss) {
+    StateInfo st;
+    bool ttHit;
+    rootPos.do_move(playMove, st);
+    TTEntry* tte    = TT.probe(rootPos.key(), ttHit);
+    Value ttValue   = ttHit ? value_from_tt(tte->value(), ss->ply) : VALUE_NONE;
+    Move ttMove     = ttHit ? tte->move() : MOVE_NONE;  
+    if(ttHit && ttMove != MOVE_NONE && MoveList<LEGAL>(rootPos).size() && ss->ply < MAX_PLY){
+        (ss+1)->ply = ss->ply + 1;
+        qsearch<NonPV,false>(rootPos, ss+1, ttValue-1, ttValue, DEPTH_ZERO);
+        playout(ttMove, ss+1);
+    }
+    rootPos.undo_move(playMove);
+}
 
 namespace {
 

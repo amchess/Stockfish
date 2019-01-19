@@ -53,6 +53,7 @@ public:
   virtual ~Thread();
   virtual void search();
   void clear();
+  virtual void playout(Move, Search::Stack*);
   void idle_loop();
   void start_searching();
   void wait_for_search_finished();
