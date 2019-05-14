@@ -44,7 +44,6 @@ bool startpoint = false;
 int openingswritten = 0;
 Key OpFileKey[8];
 bool pawnEnding = false;
-bool SE;
 int mySquare=0;
 bool updatedLearning;
 
@@ -1017,7 +1016,7 @@ moves_loop: // When in check, search starts from here
 
     value = bestValue; // Workaround a bogus 'uninitialized' warning under gcc
     moveCountPruning = false;
-	SE = false;
+	bool SE = false;
     ttCapture = ttMove && pos.capture_or_promotion(ttMove);
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
