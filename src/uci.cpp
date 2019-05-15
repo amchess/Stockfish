@@ -47,36 +47,43 @@ namespace {
   // The function sets up the position described in the given FEN string ("fen")
   // or the starting position ("startpos") and then makes the moves given in the
   // following move list ("moves").
+  
+  //from kelly begin
   bool startposition = false;
   Key FileKey = 0;
-
+  //from Kelly end
+  
   void position(Position& pos, istringstream& is, StateListPtr& states) {
 
     Move m;
     string token, fen;
-    string Newfen; 
+    string Newfen; //from Kelly
     is >> token;
 
     if (token == "startpos")
     {
-      //kellykynyama mcts begin
+      //from Kelly begin
 	  startposition = true;
       fen = StartFEN;
 	  Newfen = fen;
       is >> token; // Consume "moves" token if any
+      //from Kelly end
     }
     else if (token == "fen")
     {
+    	//from Kelly begin
 		startposition = false;
 		Newfen = token;
       	while (is >> token && token != "moves")
 	      fen += token + " ";
+	    //from Kelly end
     }
     else
-	    return;
+        return;
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
     pos.set(fen, Options["UCI_Chess960"], &states->back(), Threads.main());
+    //from Kelly begin
     int movesplayed = 0;
     int OPmoves = 0;
 	if (StartFEN != Newfen)
@@ -89,13 +96,13 @@ namespace {
 	      startposition = true;
 	      FileKey = 0;
 	  }
-    
+    //from Kelly end
 
     // Parse move list (if any)
     while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
     {
         states->emplace_back();
-
+	  //from Kelly begin	
 	  if (!FileKey)
 	  {
 	    if ((movesplayed == 2 || movesplayed == 4 || movesplayed == 6 || movesplayed == 8 || movesplayed == 10 || movesplayed == 12 || movesplayed == 14 || movesplayed == 16) && Newfen == StartFEN)
@@ -114,7 +121,7 @@ namespace {
 
         pos.do_move(m, states->back());
         movesplayed++;
-    }
+    }//from Kelly end
   }
 
 

@@ -38,7 +38,7 @@ namespace UCI {
 
 /// 'On change' actions, triggered by an option's value change
 void on_clear_hash(const Option&) { Search::clear(); }
-void on_hash_size(const Option& o) { TT.resize(o); EXP.resize(0); EXPresize(); } //mcts kellykynyama
+void on_hash_size(const Option& o) { TT.resize(o); EXP.resize(0); EXPresize(); } //from Kelly
 void on_logger(const Option& o) { start_logger(o); }
 void on_threads(const Option& o) { Threads.set(o); }
 void on_tb_path(const Option& o) { Tablebases::init(o); }

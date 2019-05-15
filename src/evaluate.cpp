@@ -719,9 +719,7 @@ namespace {
     behind |= shift<Down+Down>(behind);
 
     int bonus = popcount(safe) + popcount(behind & safe);
-    int weight =  pos.count<ALL_PIECES>(Us)
-               - (16 - pos.count<PAWN>()) / 4;
-
+    int weight = pos.count<ALL_PIECES>(Us) - 1;
     Score score = make_score(bonus * weight * weight / 16, 0);
 
     if (T)
@@ -785,6 +783,8 @@ namespace {
 
     return ScaleFactor(sf);
   }
+
+
   // Evaluation::value() is the main function of the class. It computes the various
   // parts of the evaluation and returns the value of the position from the point
   // of view of the side to move.

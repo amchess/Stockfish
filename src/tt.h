@@ -23,7 +23,7 @@
 
 #include "misc.h"
 #include "types.h"
-#include <unordered_map>
+#include <unordered_map> //from Kelly
 
 /// TTEntry struct is the 10 bytes transposition table entry, defined as below:
 ///
@@ -41,7 +41,7 @@ struct TTEntry {
   Move  move()  const { return (Move )move16; }
   Value value() const { return (Value)value16; }
   Value eval()  const { return (Value)eval16; }
-  Depth depth() const { return (Depth)(depth8 * int(ONE_PLY)); }
+  Depth depth() const { return (Depth)(depth8 * int(ONE_PLY)) + DEPTH_NONE; }
   bool is_pv() const { return (bool)(genBound8 & 0x4); }
   Bound bound() const { return (Bound)(genBound8 & 0x3); }
   void save(Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev);
@@ -54,7 +54,7 @@ private:
   int16_t  value16;
   int16_t  eval16;
   uint8_t  genBound8;
-  int8_t   depth8;
+  uint8_t  depth8;
 };
 
 
@@ -99,6 +99,7 @@ private:
   uint8_t generation8; // Size must be not bigger than TTEntry::genBound8
 };
 
+//from Kelly begin
 struct ExpEntry
 {
 	uint64_t hashkey;
@@ -146,6 +147,7 @@ Node get_node(Key key);
 typedef std::unordered_multimap<Key, NodeInfo> MCTSHashTable;
 
 extern MCTSHashTable MCTS;
+//from Kelly end
 
 extern TranspositionTable TT;
 

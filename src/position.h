@@ -29,9 +29,10 @@
 #include "bitboard.h"
 #include "types.h"
 
-
+//kelly patch begin
 extern void kelly(bool start);
 extern void files(int x, Key FileKey);
+//kelly patch end
 
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
@@ -49,6 +50,7 @@ struct StateInfo {
   Square epSquare;
 
   // Not copied when making a move (will be recomputed anyhow)
+  int repetition;
   Key        key;
   Bitboard   checkersBB;
   Piece      capturedPiece;

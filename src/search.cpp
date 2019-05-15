@@ -24,7 +24,7 @@
 #include <cstring>   // For std::memset
 #include <iostream>
 #include <sstream>
-#include <fstream>
+#include <fstream> //kelly
 #include "evaluate.h"
 #include "misc.h"
 #include "movegen.h"
@@ -36,7 +36,7 @@
 #include "tt.h"
 #include "uci.h"
 #include "syzygy/tbprobe.h"
-
+//kelly begin
 bool useExp = true;
 bool expHits;
 int movesplayed = 0;
@@ -46,8 +46,9 @@ Key OpFileKey[8];
 bool pawnEnding = false;
 int mySquare=0;
 bool updatedLearning;
-
+//kelly end
 namespace Search {
+
   LimitsType Limits;
 }
 
@@ -158,7 +159,7 @@ namespace {
 void Search::init() {
 
   for (int i = 1; i < MAX_MOVES; ++i)
-      Reductions[i] = int(1024 * std::log(i) / std::sqrt(1.95));
+     Reductions[i] = int(733.3 * std::log(i));
 }
 
 
@@ -190,6 +191,7 @@ void MainThread::search() {
   Color us = rootPos.side_to_move();
   Time.init(Limits, us, rootPos.game_ply());
   TT.new_search();
+  //Kelly begin
   int piecesCnt=0;
   expHits = false;
   piecesCnt = rootPos.count<KNIGHT>(WHITE) + rootPos.count<BISHOP>(WHITE) + rootPos.count<ROOK>(WHITE) + rootPos.count<QUEEN>(WHITE) + rootPos.count<KING>(WHITE)
@@ -204,7 +206,7 @@ void MainThread::search() {
   {
 	  useExp = true;
   }
-
+  //Kelly end
   if (rootMoves.empty())
   {
       rootMoves.emplace_back(MOVE_NONE);
@@ -264,10 +266,8 @@ void MainThread::search() {
 
       // Vote according to score and depth
       for (Thread* th : Threads)
-      {
-          int64_t s = th->rootMoves[0].score - minScore + 1;
-          votes[th->rootMoves[0].pv[0]] += 200 + s * s * int(th->completedDepth);
-      }
+          votes[th->rootMoves[0].pv[0]] +=
+               (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
 
       // Select best thread
       auto bestVote = votes[this->rootMoves[0].pv[0]];
@@ -280,7 +280,8 @@ void MainThread::search() {
   }
 
   previousScore = bestThread->rootMoves[0].score;
-
+  
+  //kelly begin	
   if ((((movesplayed <= 300) || (piecesCnt <= 6)) && (bestThread->completedDepth > 4 * ONE_PLY)))
   {
 	  std::ofstream general("experience.bin", std::ofstream::app | std::ofstream::binary);
@@ -324,7 +325,8 @@ void MainThread::search() {
   {
 	  useExp = false;
   }
-
+  //Kelly end
+  
   // Send again PV info if we have a new best thread
   if (bestThread != this)
       sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth, -VALUE_INFINITE, VALUE_INFINITE) << sync_endl;
@@ -473,17 +475,14 @@ void Thread::search() {
                   beta = (alpha + beta) / 2;
                   alpha = std::max(bestValue - delta, -VALUE_INFINITE);
 
+                  failedHighCnt = 0;
                   if (mainThread)
-                  {
-                      failedHighCnt = 0;
                       mainThread->stopOnPonderhit = false;
-                  }
               }
               else if (bestValue >= beta)
               {
                   beta = std::min(bestValue + delta, VALUE_INFINITE);
-                  if (mainThread)
-                      ++failedHighCnt;
+                  ++failedHighCnt;
               }
               else
                   break;
@@ -604,11 +603,13 @@ namespace {
     StateInfo st;
     TTEntry* tte;
     Key posKey;
-    Move ttMove, move, excludedMove=MOVE_NONE, bestMove,expttMove=MOVE_NONE;
+    Move ttMove, move, excludedMove=MOVE_NONE, bestMove,expttMove=MOVE_NONE;//from Kelly
     Depth extension, newDepth;
+    //from Kelly begin
     Value bestValue, value, ttValue, eval=VALUE_NONE, maxValue, expttValue=VALUE_NONE;
     bool ttHit, ttPv, inCheck, givesCheck, improving, expttHit=false;
-    bool captureOrPromotion, doFullDepthSearch, moveCountPruning, ttCapture; 
+    //from Kelly End
+    bool captureOrPromotion, doFullDepthSearch, moveCountPruning, ttCapture;
     Piece movedPiece;
     int moveCount, captureCount, quietCount;
 
@@ -619,7 +620,6 @@ namespace {
     moveCount = captureCount = quietCount = ss->moveCount = 0;
     bestValue = -VALUE_INFINITE;
     maxValue = VALUE_INFINITE;
-
 
     // Check for the available remaining time
     if (thisThread == Threads.main())
@@ -865,6 +865,7 @@ namespace {
     }
     else
     {
+      //from kelly begin	
       if ((!(expttHit)&& !updatedLearning) )
       {
 	      if ((ss-1)->currentMove != MOVE_NULL)
@@ -885,6 +886,7 @@ namespace {
 	      if (eval == VALUE_NONE)
 		      ss->staticEval = eval = evaluate(pos);
       }
+      //from Kelly end
     }
 
     // Step 7. Razoring (~2 Elo)
@@ -1016,8 +1018,9 @@ moves_loop: // When in check, search starts from here
 
     value = bestValue; // Workaround a bogus 'uninitialized' warning under gcc
     moveCountPruning = false;
-	bool SE = false;
+	bool SE = false;//from Kelly
     ttCapture = ttMove && pos.capture_or_promotion(ttMove);
+    int singularExtensionLMRmultiplier = 0;
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
@@ -1057,7 +1060,6 @@ moves_loop: // When in check, search starts from here
       // then that move is singular and should be extended. To verify this we do
       // a reduced search on all the other moves but the ttMove and if the
       // result is lower than ttValue minus a margin then we will extend the ttMove.
-
       if (    depth >= 8 * ONE_PLY
           &&  move == ttMove
           && !rootNode
@@ -1076,12 +1078,23 @@ moves_loop: // When in check, search starts from here
 
           if (value < singularBeta)
 	      {
-		      extension = ONE_PLY;
+              extension = ONE_PLY;
+              singularExtensionLMRmultiplier++;
+              if (value < singularBeta - std::min(3 * depth / ONE_PLY, 39))
+              	  singularExtensionLMRmultiplier++;
+              	      
+		      //from Kelly begin
 		      if (expttHit && move == expttMove)
 		      {
 			      SE = true;
 		      }
+		      //from Kelly end
 	      }
+          // Multi-cut pruning
+          // Our ttMove is assumed to fail high, and now we failed high also on a reduced
+          // search without the ttMove. So we assume this expected Cut-node is not singular,
+          // that is multiple moves fail high, and we can prune the whole subtree by returning
+          // the hard beta bound.
           else if (cutNode && singularBeta > beta)
               return beta;
       }
@@ -1125,6 +1138,7 @@ moves_loop: // When in check, search starts from here
           {
               // Move count based pruning (~30 Elo)
               if (moveCountPruning)
+			  //from Kelly begin
 				{
                   continue;
 				}
@@ -1132,7 +1146,8 @@ moves_loop: // When in check, search starts from here
 				{
 		  			continue;
 				}
-
+			  //from Kelly end
+			  
               // Reduced depth of the next LMR search
               int lmrDepth = std::max(newDepth - reduction(improving, depth, moveCount), DEPTH_ZERO);
               lmrDepth /= ONE_PLY;
@@ -1191,6 +1206,8 @@ moves_loop: // When in check, search starts from here
           // Decrease reduction if opponent's move count is high (~10 Elo)
           if ((ss-1)->moveCount > 15)
               r -= ONE_PLY;
+          // Decrease reduction if move has been singularly extended
+          r -= singularExtensionLMRmultiplier * ONE_PLY;
 
           if (!captureOrPromotion)
           {
