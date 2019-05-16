@@ -39,10 +39,10 @@
 //kelly begin
 bool useExp = true;
 bool expHits;
-int movesplayed = 0;
-bool startpoint = false;
-int openingswritten = 0;
-Key OpFileKey[8];
+int movesPlayed = 0;
+bool startPoint = false;
+int openingsWritten = 0;
+Key opFileKey[8];
 bool pawnEnding = false;
 int mySquare=0;
 bool updatedLearning;
@@ -192,11 +192,9 @@ void MainThread::search() {
   Time.init(Limits, us, rootPos.game_ply());
   TT.new_search();
   //Kelly begin
-  int piecesCnt=0;
   expHits = false;
-  piecesCnt = rootPos.count<KNIGHT>(WHITE) + rootPos.count<BISHOP>(WHITE) + rootPos.count<ROOK>(WHITE) + rootPos.count<QUEEN>(WHITE) + rootPos.count<KING>(WHITE)
+  int piecesCnt = rootPos.count<KNIGHT>(WHITE) + rootPos.count<BISHOP>(WHITE) + rootPos.count<ROOK>(WHITE) + rootPos.count<QUEEN>(WHITE) + rootPos.count<KING>(WHITE)
 	  + rootPos.count<KNIGHT>(BLACK) + rootPos.count<BISHOP>(BLACK) + rootPos.count<ROOK>(BLACK) + rootPos.count<QUEEN>(BLACK) + rootPos.count<KING>(BLACK);
-
   if (piecesCnt <= 8 && !pawnEnding)
   {
 	  pawnEnding = true;
@@ -264,25 +262,25 @@ void MainThread::search() {
       for (Thread* th: Threads)
           minScore = std::min(minScore, th->rootMoves[0].score);
 
-      // Vote according to score and depth
+      // Vote according to score and depth, and select the best thread
+      int64_t bestVote = 0;
       for (Thread* th : Threads)
+      {
           votes[th->rootMoves[0].pv[0]] +=
                (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
 
-      // Select best thread
-      auto bestVote = votes[this->rootMoves[0].pv[0]];
-      for (Thread* th : Threads)
           if (votes[th->rootMoves[0].pv[0]] > bestVote)
           {
               bestVote = votes[th->rootMoves[0].pv[0]];
               bestThread = th;
           }
+      }
   }
 
   previousScore = bestThread->rootMoves[0].score;
   
   //kelly begin	
-  if ((((movesplayed <= 300) || (piecesCnt <= 6)) && (bestThread->completedDepth > 4 * ONE_PLY)))
+  if ((((movesPlayed <= 300) || (piecesCnt <= 6)) && (bestThread->completedDepth > 4 * ONE_PLY)))
   {
 	  std::ofstream general("experience.bin", std::ofstream::app | std::ofstream::binary);
 	  ExpEntry tempExpEntry;
@@ -290,19 +288,19 @@ void MainThread::search() {
 	  tempExpEntry.hashkey = rootPos.key();
 	  tempExpEntry.move = bestThread->rootMoves[0].pv[0];
 	  tempExpEntry.score = bestThread->rootMoves[0].score;
-	  if (movesplayed <= 300 && startpoint &&  piecesCnt > 6)
+	  if (movesPlayed <= 300 && startPoint &&  piecesCnt > 6)
 	  {
 		  general.write((char*)&tempExpEntry, sizeof(tempExpEntry));
 	  }
-	  if (startpoint &&  piecesCnt > 6)
+	  if (startPoint &&  piecesCnt > 6)
 	  {
-		  for (int x = 0; x < openingswritten; x++)
+		  for (int x = 0; x < openingsWritten; x++)
 		  {
 			  string openings;
 			  char *opnings;
 
 			  std::ostringstream ss;
-			  ss << OpFileKey[x];
+			  ss << opFileKey[x];
 			  openings = ss.str() + ".bin";
 			  opnings = new char[openings.length() + 1];
 			  std::strcpy(opnings, openings.c_str());
@@ -317,7 +315,7 @@ void MainThread::search() {
 		  pawngame.write((char*)&tempExpEntry, sizeof(tempExpEntry));
 		  pawngame.close();
 	  }
-	  movesplayed++;
+	  movesPlayed++;
 
   }
 
@@ -709,11 +707,12 @@ namespace {
         return ttValue;
     }
 
+	//from Kelly begin
 	expttHit = false;
 	updatedLearning = false;
 
-	if (!excludedMove && useExp)
-	{
+      if (!excludedMove && useExp)
+      {
 		Node node = get_node(posKey);
 		if (node!=nullptr)
 		{
@@ -728,14 +727,14 @@ namespace {
 				Value myValue = -VALUE_INFINITE;
 				for (int x = 0; x < node->sons; x++)
 				{
-					int mytempSquare=0;
+					int myTempSquare=0;
 					if (x == 0)
 					{
 					  mySquare = from_to(node->child[x].move);
 					}
 					else
-					  mytempSquare = from_to(node->child[x].move);
-					if (mySquare != mytempSquare && x>0)
+					  myTempSquare = from_to(node->child[x].move);
+					if (mySquare != myTempSquare && x>0)
 					{
 					  break;
 					}
@@ -752,7 +751,7 @@ namespace {
 					{
 						ttMove = node->lateChild.move;
 					}
-					thisThread->tbHits.fetch_add(1, std::memory_order_relaxed);
+					//thisThread->tbHits.fetch_add(1, std::memory_order_relaxed);
 				}
 
 				if (!PvNode && updatedLearning
@@ -770,24 +769,6 @@ namespace {
 					}
 					return myValue;
 				}
-				  //from old searchMCTS
-				  if (!rootNode && updatedLearning
-					  && child.depth >= depth
-					  )
-				  {
-					  if (child.score >= beta)
-					  {
-						  if (!pos.capture_or_promotion(child.move))
-							  update_quiet_stats(pos, ss, child.move, nullptr, 0, stat_bonus(depth));
-
-						  // Extra penalty for a quiet TT move in previous ply when it gets refuted
-						  if ((ss - 1)->moveCount == 1 && !pos.captured_piece())
-							  update_continuation_histories(ss - 1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + ONE_PLY));
-					  }
-					  thisThread->tbHits.fetch_add(1, std::memory_order_relaxed);
-					  return myValue;
-				  }
-				  //end from old searchMCTS
 			}
 
 		}
@@ -866,7 +847,7 @@ namespace {
     else
     {
       //from kelly begin	
-      if ((!(expttHit)&& !updatedLearning) )
+      if (!(expttHit)|| !(updatedLearning))
       {
 	      if ((ss-1)->currentMove != MOVE_NULL)
 	      {
@@ -879,8 +860,8 @@ namespace {
 	      }
 	      tte->save(posKey, VALUE_NONE, ttPv, BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
       }      
-      else	
-      {
+      else
+	  {
 	      // Never assume anything on values stored in TT
 	      ss->staticEval = eval = expttValue;
 	      if (eval == VALUE_NONE)
@@ -1908,14 +1889,14 @@ void Tablebases::rank_root_moves(Position& pos, Search::RootMoves& rootMoves) {
 
 void kelly(bool start)
 {
-	startpoint = start;
+	startPoint = start;
 }
 
 void files(int x, Key FileKey)
 {
 	EXP.new_search();
 	useExp = true;
-	OpFileKey[x] = FileKey;
+	opFileKey[x] = FileKey;
 	if (FileKey)
 	{
 		string openings;
@@ -1927,6 +1908,6 @@ void files(int x, Key FileKey)
 		opnings = new char[openings.length() + 1];
 		std::strcpy(opnings, openings.c_str());
 		EXPload(opnings);
-		openingswritten = x;
+		openingsWritten = x;
 	}
 }
