@@ -882,7 +882,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (end >= 4)
   {
       StateInfo* stp = st->previous->previous;
-      for (int i=4; i <= end; i += 2)
+      for (int i = 4; i <= end; i += 2)
       {
           stp = stp->previous->previous;
           if (stp->key == st->key)
@@ -1299,8 +1299,8 @@ bool Position::pos_is_ok() const {
               assert(0 && "pos_is_ok: Index");
   }
 
-  for (Color c = WHITE; c <= BLACK; ++c)
-      for (CastlingSide s = KING_SIDE; s <= QUEEN_SIDE; s = CastlingSide(s + 1))
+  for (Color c : { WHITE, BLACK })
+      for (CastlingSide s : {KING_SIDE, QUEEN_SIDE})
       {
           if (!can_castle(c | s))
               continue;
