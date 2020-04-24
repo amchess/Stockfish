@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (c) 2013 Ronald de Man
-  Copyright (C) 2016-2019 Marco Costalba, Lucas Braesch
+  Copyright (C) 2016-2020 Marco Costalba, Lucas Braesch
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -66,7 +66,6 @@ enum TBType { KEY, WDL, DTZ }; // Used as template parameter
 enum TBFlag { STM = 1, Mapped = 2, WinPlies = 4, LossPlies = 8, Wide = 16, SingleValue = 128 };
 
 inline WDLScore operator-(WDLScore d) { return WDLScore(-int(d)); }
-inline Square operator^=(Square& s, int i) { return s = Square(int(s) ^ i); }
 inline Square operator^(Square s, int i) { return Square(int(s) ^ i); }
 
 const std::string PieceToChar = " PNBRQK  pnbrqk";
@@ -683,7 +682,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
     bool blackStronger = (pos.material_key() != entry->key);
 
     int flipColor   = (symmetricBlackToMove || blackStronger) * 8;
-    int flipSquares = (symmetricBlackToMove || blackStronger) * 070;
+    int flipSquares = (symmetricBlackToMove || blackStronger) * 56;
     int stm         = (symmetricBlackToMove || blackStronger) ^ pos.side_to_move();
 
     // For pawns, TB files store 4 separate tables according if leading pawn is on
@@ -706,7 +705,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
 
         std::swap(squares[0], *std::max_element(squares, squares + leadPawnsCnt, pawns_comp));
 
-        tbFile = map_to_queenside(file_of(squares[0]));
+        tbFile = File(edge_distance(file_of(squares[0])));
     }
 
     // DTZ tables are one-sided, i.e. they store positions only for white to
@@ -730,8 +729,8 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
 
     // Then we reorder the pieces to have the same sequence as the one stored
     // in pieces[i]: the sequence that ensures the best compression.
-    for (int i = leadPawnsCnt; i < size; ++i)
-        for (int j = i; j < size; ++j)
+    for (int i = leadPawnsCnt; i < size - 1; ++i)
+        for (int j = i + 1; j < size; ++j)
             if (d->pieces[i] == pieces[j])
             {
                 std::swap(pieces[i], pieces[j]);
@@ -743,7 +742,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
     // the triangle A1-D1-D4.
     if (file_of(squares[0]) > FILE_D)
         for (int i = 0; i < size; ++i)
-            squares[i] ^= 7; // Horizontal flip: SQ_H1 -> SQ_A1
+            squares[i] = flip_file(squares[i]);
 
     // Encode leading pawns starting with the one with minimum MapPawns[] and
     // proceeding in ascending order.
@@ -762,7 +761,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
     // piece is below RANK_5.
     if (rank_of(squares[0]) > RANK_4)
         for (int i = 0; i < size; ++i)
-            squares[i] ^= 070; // Vertical flip: SQ_A8 -> SQ_A1
+            squares[i] = flip_rank(squares[i]);
 
     // Look for the first piece of the leading group not on the A1-D4 diagonal
     // and ensure it is mapped below the diagonal.
@@ -770,7 +769,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
         if (!off_A1H8(squares[i]))
             continue;
 
-        if (off_A1H8(squares[i]) > 0) // A1-H8 diagonal flip: SQ_A3 -> SQ_C3
+        if (off_A1H8(squares[i]) > 0) // A1-H8 diagonal flip: SQ_A3 -> SQ_C1
             for (int j = i; j < size; ++j)
                 squares[j] = Square(((squares[j] >> 3) | (squares[j] << 3)) & 63);
         break;
@@ -1344,7 +1343,7 @@ void Tablebases::init(const std::string& paths) {
                 if (leadPawnsCnt == 1)
                 {
                     MapPawns[sq] = availableSquares--;
-                    MapPawns[sq ^ 7] = availableSquares--; // Horizontal flip
+                    MapPawns[flip_file(sq)] = availableSquares--;
                 }
                 LeadPawnIdx[leadPawnsCnt][sq] = idx;
                 idx += Binomial[leadPawnsCnt - 1][MapPawns[sq]];
