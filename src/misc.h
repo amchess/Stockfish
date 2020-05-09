@@ -2,7 +2,7 @@
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
   Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+  Copyright (C) 2015-2020 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -30,8 +30,10 @@
 #include "types.h"
 
 const std::string engine_info(bool to_uci = false);
+const std::string compiler_info();
 void prefetch(void* addr);
 void start_logger(const std::string& fname);
+void* aligned_ttmem_alloc(size_t size, void*& mem);
 
 void dbg_hit_on(bool b);
 void dbg_hit_on(bool c, bool b);
@@ -62,6 +64,14 @@ std::ostream& operator<<(std::ostream&, SyncCout);
 #define sync_cout std::cout << IO_LOCK
 #define sync_endl std::endl << IO_UNLOCK
 
+namespace Utility {
+
+/// Clamp a value between lo and hi. Available in c++17.
+template<class T> constexpr const T& clamp(const T& v, const T& lo, const T& hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+}
 
 /// xorshift64star Pseudo-Random Number Generator
 /// This class is based on original code written and dedicated
