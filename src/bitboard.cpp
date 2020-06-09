@@ -56,8 +56,9 @@ const std::string Bitboards::pretty(Bitboard b) {
       for (File f = FILE_A; f <= FILE_H; ++f)
           s += b & make_square(f, r) ? "| X " : "|   ";
 
-      s += "|\n+---+---+---+---+---+---+---+---+\n";
+      s += "| " + std::to_string(1 + r) + "\n+---+---+---+---+---+---+---+---+\n";
   }
+  s += "  a   b   c   d   e   f   g   h\n";
 
   return s;
 }
@@ -69,7 +70,7 @@ const std::string Bitboards::pretty(Bitboard b) {
 void Bitboards::init() {
 
   for (unsigned i = 0; i < (1 << 16); ++i)
-      PopCnt16[i] = std::bitset<16>(i).count();
+      PopCnt16[i] = uint8_t(std::bitset<16>(i).count());
 
   for (Square s = SQ_A1; s <= SQ_H8; ++s)
       SquareBB[s] = (1ULL << s);

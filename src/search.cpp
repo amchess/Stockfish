@@ -61,8 +61,8 @@ namespace {
   // Different node types, used as a template parameter
   enum NodeType { NonPV, PV };
 
-  constexpr uint64_t ttHitAverageWindow     = 4096;
-  constexpr uint64_t ttHitAverageResolution = 1024;
+  constexpr uint64_t TtHitAverageWindow     = 4096;
+  constexpr uint64_t TtHitAverageResolution = 1024;
 
   // Razor and futility margins
   constexpr int RazorMargin = 531;
@@ -236,14 +236,8 @@ void MainThread::search() {
   }
   else
   {
-      for (Thread* th : Threads)
-      {
-          th->bestMoveChanges = 0;
-          if (th != this)
-              th->start_searching();
-      }
-
-      Thread::search(); // Let's start searching!
+      Threads.start_searching(); // start non-main threads
+      Thread::search();          // main thread start searching
   }
 
   // When we reach the maximum depth, we can arrive here without a raise of
@@ -260,9 +254,7 @@ void MainThread::search() {
   Threads.stop = true;
 
   // Wait until all threads have finished
-  for (Thread* th : Threads)
-      if (th != this)
-          th->wait_for_search_finished();
+  Threads.wait_for_search_finished();
 
   // When playing in 'nodes as time' mode, subtract the searched nodes from
   // the available ones before exiting.
@@ -271,37 +263,11 @@ void MainThread::search() {
 
   Thread* bestThread = this;
 
-  // Check if there are threads with a better score than main thread
-  if (    Options["MultiPV"] == 1
-      && !Limits.depth
-      && !(Skill(Options["Skill Level"]).enabled() || Options["UCI_LimitStrength"])
-      &&  rootMoves[0].pv[0] != MOVE_NONE)
-  {
-      std::map<Move, int64_t> votes;
-      Value minScore = this->rootMoves[0].score;
-
-      // Find minimum score
-      for (Thread* th: Threads)
-          minScore = std::min(minScore, th->rootMoves[0].score);
-
-      // Vote according to score and depth, and select the best thread
-      for (Thread* th : Threads)
-      {
-          votes[th->rootMoves[0].pv[0]] +=
-              (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
-
-          if (abs(bestThread->rootMoves[0].score) >= VALUE_TB_WIN_IN_MAX_PLY)
-          {
-              // Make sure we pick the shortest mate / TB conversion or stave off mate the longest
-              if (th->rootMoves[0].score > bestThread->rootMoves[0].score)
-                  bestThread = th;
-          }
-          else if (   th->rootMoves[0].score >= VALUE_TB_WIN_IN_MAX_PLY
-                   || (   th->rootMoves[0].score > VALUE_TB_LOSS_IN_MAX_PLY
-                       && votes[th->rootMoves[0].pv[0]] > votes[bestThread->rootMoves[0].pv[0]]))
-              bestThread = th;
-      }
-  }
+  if (int(Options["MultiPV"]) == 1 &&
+      !Limits.depth &&
+      !(Skill(Options["Skill Level"]).enabled() || int(Options["UCI_LimitStrength"])) &&
+      rootMoves[0].pv[0] != MOVE_NONE)
+      bestThread = Threads.get_best_thread();
 
   bestPreviousScore = bestThread->rootMoves[0].score;
 
@@ -350,14 +316,17 @@ void Thread::search() {
   if (mainThread)
   {
       if (mainThread->bestPreviousScore == VALUE_INFINITE)
-          for (int i=0; i<4; ++i)
+          for (int i = 0; i < 4; ++i)
               mainThread->iterValue[i] = VALUE_ZERO;
       else
-          for (int i=0; i<4; ++i)
+          for (int i = 0; i < 4; ++i)
               mainThread->iterValue[i] = mainThread->bestPreviousScore;
   }
 
-  size_t multiPV = Options["MultiPV"];
+  std::copy(&lowPlyHistory[2][0], &lowPlyHistory.back().back() + 1, &lowPlyHistory[0][0]);
+  std::fill(&lowPlyHistory[MAX_LPH - 2][0], &lowPlyHistory.back().back() + 1, 0);
+
+  size_t multiPV = size_t(Options["MultiPV"]);
 
   // Pick integer skill levels, but non-deterministically round up or down
   // such that the average integer skill corresponds to the input floating point one.
@@ -378,11 +347,9 @@ void Thread::search() {
       multiPV = std::max(multiPV, (size_t)4);
 
   multiPV = std::min(multiPV, rootMoves.size());
-  ttHitAverage = ttHitAverageWindow * ttHitAverageResolution / 2;
+  ttHitAverage = TtHitAverageWindow * TtHitAverageResolution / 2;
 
   int ct = 0; // From centipawns
-
-      ct =  0;
 
   // Evaluation score is from the white point of view
   contempt = (us == WHITE ?  make_score(ct, ct / 2)
@@ -433,7 +400,7 @@ void Thread::search() {
               beta  = std::min(prev + delta, VALUE_INFINITE);
 
               // Adjust contempt based on root move's previousScore (dynamic contempt)
-              int dct = ct;
+              int dct = 0;
 
               contempt = (us == WHITE ?  make_score(dct, dct / 2)
                                       : -make_score(dct, dct / 2));
@@ -531,8 +498,8 @@ void Thread::search() {
           && !Threads.stop
           && !mainThread->stopOnPonderhit)
       {
-          double fallingEval = (332 +  6 * (mainThread->bestPreviousScore - bestValue)
-                                    +  6 * (mainThread->iterValue[iterIdx]  - bestValue)) / 704.0;
+          double fallingEval = (332 + 6 * (mainThread->bestPreviousScore - bestValue)
+                                    + 6 * (mainThread->iterValue[iterIdx] - bestValue)) / 704.0;
           fallingEval = Utility::clamp(fallingEval, 0.5, 1.5);
 
           // If the bestMove is stable over several iterations, reduce time accordingly
@@ -547,9 +514,11 @@ void Thread::search() {
           }
           double bestMoveInstability = 1 + totBestMoveChanges / Threads.size();
 
-          // Stop the search if we have only one legal move, or if available time elapsed
-          if (   rootMoves.size() == 1
-              || Time.elapsed() > Time.optimum() * fallingEval * reduction * bestMoveInstability)
+          double totalTime = rootMoves.size() == 1 ? 0 :
+                             Time.optimum() * fallingEval * reduction * bestMoveInstability;
+
+          // Stop the search if we have exceeded the totalTime, at least 1ms search.
+          if (Time.elapsed() > totalTime)
           {
               // If we are allowed to ponder do not stop the search now but
               // keep pondering until the GUI sends "ponderhit" or "stop".
@@ -560,7 +529,7 @@ void Thread::search() {
           }
           else if (   Threads.increaseDepth
                    && !mainThread->ponder
-                   && Time.elapsed() > Time.optimum() * fallingEval * reduction * bestMoveInstability * 0.6)
+                   && Time.elapsed() > totalTime * 0.6)
                    Threads.increaseDepth = false;
           else
                    Threads.increaseDepth = true;
@@ -621,7 +590,8 @@ namespace {
     Depth extension, newDepth;
     Value bestValue, value, ttValue, eval, maxValue;
     bool ttHit, ttPv, formerPv, givesCheck, improving, didLMR, priorCapture;
-    bool captureOrPromotion, doFullDepthSearch, moveCountPruning, ttCapture, singularLMR;
+    bool captureOrPromotion, doFullDepthSearch, moveCountPruning,
+         ttCapture, singularQuietLMR;
     Piece movedPiece;
     int moveCount, captureCount, quietCount;
 
@@ -696,8 +666,8 @@ namespace {
         thisThread->lowPlyHistory[ss->ply - 1][from_to((ss-1)->currentMove)] << stat_bonus(depth - 5);
 
     // thisThread->ttHitAverage can be used to approximate the running average of ttHit
-    thisThread->ttHitAverage =   (ttHitAverageWindow - 1) * thisThread->ttHitAverage / ttHitAverageWindow
-                                + ttHitAverageResolution * ttHit;
+    thisThread->ttHitAverage =   (TtHitAverageWindow - 1) * thisThread->ttHitAverage / TtHitAverageWindow
+                                + TtHitAverageResolution * ttHit;
 
     // At non-PV nodes we check for an early TT cutoff
     if (  !PvNode
@@ -959,10 +929,10 @@ moves_loop: // When in check, search starts from here
                                       contHist,
                                       countermove,
                                       ss->killers,
-                                      depth > 12 ? ss->ply : MAX_PLY);
+                                      ss->ply);
 
     value = bestValue;
-    singularLMR = moveCountPruning = false;
+    singularQuietLMR = moveCountPruning = false;
     ttCapture = ttMove && pos.capture_or_promotion(ttMove);
 
     // Mark this node as being searched
@@ -1043,6 +1013,14 @@ moves_loop: // When in check, search starts from here
                   && captureHistory[movedPiece][to_sq(move)][type_of(pos.piece_on(to_sq(move)))] < 0)
                   continue;
 
+              // Futility pruning for captures
+              if (   !givesCheck
+                  && lmrDepth < 6
+                  && !(PvNode && abs(bestValue) < 2)
+                  && !ss->inCheck
+                  && ss->staticEval + 270 + 384 * lmrDepth + PieceValue[MG][type_of(pos.piece_on(to_sq(move)))] <= alpha)
+                  continue;
+
               // See based pruning
               if (!pos.see_ge(move, Value(-194) * depth)) // (~25 Elo)
                   continue;
@@ -1075,7 +1053,7 @@ moves_loop: // When in check, search starts from here
           if (value < singularBeta)
           {
               extension = 1;
-              singularLMR = true;
+              singularQuietLMR = !ttCapture;
           }
 
           // Multi-cut pruning
@@ -1157,12 +1135,12 @@ moves_loop: // When in check, search starts from here
               || moveCountPruning
               || ss->staticEval + PieceValue[EG][pos.captured_piece()] <= alpha
               || cutNode
-              || thisThread->ttHitAverage < 375 * ttHitAverageResolution * ttHitAverageWindow / 1024))
+              || thisThread->ttHitAverage < 375 * TtHitAverageResolution * TtHitAverageWindow / 1024))
       {
           Depth r = reduction(improving, depth, moveCount);
 
           // Decrease reduction if the ttHit running average is large
-          if (thisThread->ttHitAverage > 500 * ttHitAverageResolution * ttHitAverageWindow / 1024)
+          if (thisThread->ttHitAverage > 500 * TtHitAverageResolution * TtHitAverageWindow / 1024)
               r--;
 
           // Reduction if other threads are searching this position.
@@ -1181,7 +1159,7 @@ moves_loop: // When in check, search starts from here
               r--;
 
           // Decrease reduction if ttMove has been singularly extended (~3 Elo)
-          if (singularLMR)
+          if (singularQuietLMR)
               r -= 1 + formerPv;
 
           if (!captureOrPromotion)

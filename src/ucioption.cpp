@@ -38,9 +38,9 @@ namespace UCI {
 
 /// 'On change' actions, triggered by an option's value change
 void on_clear_hash(const Option&) { Search::clear(); }
-void on_hash_size(const Option& o) { TT.resize(o); }
+void on_hash_size(const Option& o) { TT.resize(size_t(o)); }
 void on_logger(const Option& o) { start_logger(o); }
-void on_threads(const Option& o) { Threads.set(o); }
+void on_threads(const Option& o) { Threads.set(size_t(o)); }
 void on_tb_path(const Option& o) { Tablebases::init(o); }
 
 
@@ -56,28 +56,28 @@ bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const 
 
 void init(OptionsMap& o) {
 
-  // at most 2^32 clusters.
-  constexpr int MaxHashMB = Is64Bit ? 131072 : 2048;
+  // At most 2^32 superclusters. Supercluster = 8 kB
+  constexpr int MaxHashMB = Is64Bit ? 33554432 : 2048;
 
   o["Debug Log File"]        << Option("", on_logger);
   o["Contempt"]              << Option(0, -100, 100);
-  o["Analysis Contempt"]     << Option("Both var Off var White var Black var Both", "Both");
+  o["Analysis Contempt"]     << Option("Both var Off var White var Black var Both", "Off");
   o["Threads"]               << Option(1, 1, 512, on_threads);
   o["Hash"]                  << Option(16, 1, MaxHashMB, on_hash_size);
   o["Clear Hash"]            << Option(on_clear_hash);
   o["Ponder"]                << Option(false);
   o["MultiPV"]               << Option(1, 1, 500);
   o["Skill Level"]           << Option(20, 0, 20);
-  o["Move Overhead"]         << Option(30, 0, 5000);
-  o["Minimum Thinking Time"] << Option(20, 0, 5000);
-  o["Slow Mover"]            << Option(84, 10, 1000);
+  o["Move Overhead"]         << Option(100, 0, 5000);
+  o["Minimum Thinking Time"] << Option( 0, 0, 5000);
+  o["Slow Mover"]            << Option(100, 10, 1000);
   o["nodestime"]             << Option(0, 0, 10000);
   o["UCI_Chess960"]          << Option(false);
   o["UCI_AnalyseMode"]       << Option(false);
   o["UCI_LimitStrength"]     << Option(false);
   o["UCI_Elo"]               << Option(1350, 1350, 2850);
-  o["SyzygyPath"]            << Option("<empty>", on_tb_path);
-  o["SyzygyProbeDepth"]      << Option(1, 1, 100);
+  o["SyzygyPath"]            << Option("D:/SygyzyTBs", on_tb_path);
+  o["SyzygyProbeDepth"]      << Option(14, 1, 100);
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
 }

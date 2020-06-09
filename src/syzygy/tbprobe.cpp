@@ -60,7 +60,7 @@ namespace {
 constexpr int TBPIECES = 7; // Max number of supported pieces
 
 enum { BigEndian, LittleEndian };
-enum TBType { KEY, WDL, DTZ }; // Used as template parameter
+enum TBType { WDL, DTZ }; // Used as template parameter
 
 // Each table has a set of flags: all of them refer to DTZ tables, the last one to WDL tables
 enum TBFlag { STM = 1, Mapped = 2, WinPlies = 4, LossPlies = 8, Wide = 16, SingleValue = 128 };
@@ -403,7 +403,17 @@ TBTable<DTZ>::TBTable(const TBTable<WDL>& wdl) : TBTable() {
 // at init time, accessed at probe time.
 class TBTables {
 
-    typedef std::tuple<Key, TBTable<WDL>*, TBTable<DTZ>*> Entry;
+    struct Entry
+    {
+        Key key;
+        TBTable<WDL>* wdl;
+        TBTable<DTZ>* dtz;
+
+        template <TBType Type>
+        TBTable<Type>* get() const {
+            return (TBTable<Type>*)(Type == WDL ? (void*)wdl : (void*)dtz);
+        }
+    };
 
     static constexpr int Size = 1 << 12; // 4K table, indexed by key's 12 lsb
     static constexpr int Overflow = 1;  // Number of elements allowed to map to the last bucket
@@ -415,12 +425,12 @@ class TBTables {
 
     void insert(Key key, TBTable<WDL>* wdl, TBTable<DTZ>* dtz) {
         uint32_t homeBucket = (uint32_t)key & (Size - 1);
-        Entry entry = std::make_tuple(key, wdl, dtz);
+        Entry entry{ key, wdl, dtz };
 
         // Ensure last element is empty to avoid overflow when looking up
         for (uint32_t bucket = homeBucket; bucket < Size + Overflow - 1; ++bucket) {
-            Key otherKey = std::get<KEY>(hashTable[bucket]);
-            if (otherKey == key || !std::get<WDL>(hashTable[bucket])) {
+            Key otherKey = hashTable[bucket].key;
+            if (otherKey == key || !hashTable[bucket].get<WDL>()) {
                 hashTable[bucket] = entry;
                 return;
             }
@@ -429,7 +439,7 @@ class TBTables {
             // insert here and search for a new spot for the other element instead.
             uint32_t otherHomeBucket = (uint32_t)otherKey & (Size - 1);
             if (otherHomeBucket > homeBucket) {
-                swap(entry, hashTable[bucket]);
+                std::swap(entry, hashTable[bucket]);
                 key = otherKey;
                 homeBucket = otherHomeBucket;
             }
@@ -442,8 +452,8 @@ public:
     template<TBType Type>
     TBTable<Type>* get(Key key) {
         for (const Entry* entry = &hashTable[(uint32_t)key & (Size - 1)]; ; ++entry) {
-            if (std::get<KEY>(*entry) == key || !std::get<Type>(*entry))
-                return std::get<Type>(*entry);
+            if (entry->key == key || !entry->get<Type>())
+                return entry->get<Type>();
         }
     }
 
@@ -520,7 +530,7 @@ int decompress_pairs(PairsData* d, uint64_t idx) {
     //       I(k) = k * d->span + d->span / 2      (1)
 
     // First step is to get the 'k' of the I(k) nearest to our idx, using definition (1)
-    uint32_t k = idx / d->span;
+    uint32_t k = uint32_t(idx / d->span);
 
     // Then we read the corresponding SparseIndex[] entry
     uint32_t block = number<uint32_t, LittleEndian>(&d->sparseIndex[k].block);
@@ -566,7 +576,7 @@ int decompress_pairs(PairsData* d, uint64_t idx) {
         // All the symbols of a given length are consecutive integers (numerical
         // sequence property), so we can compute the offset of our symbol of
         // length len, stored at the beginning of buf64.
-        sym = (buf64 - d->base64[len]) >> (64 - len - d->minSymLen);
+        sym = Sym((buf64 - d->base64[len]) >> (64 - len - d->minSymLen));
 
         // Now add the value of the lowest symbol of length len to get our symbol
         sym += number<Sym, LittleEndian>(&d->lowestSym[len]);
@@ -974,7 +984,7 @@ uint8_t* set_sizes(PairsData* d, uint8_t* data) {
 
     d->sizeofBlock = 1ULL << *data++;
     d->span = 1ULL << *data++;
-    d->sparseIndexSize = (tbSize + d->span - 1) / d->span; // Round up
+    d->sparseIndexSize = size_t((tbSize + d->span - 1) / d->span); // Round up
     auto padding = number<uint8_t, LittleEndian>(data++);
     d->blocksNum = number<uint32_t, LittleEndian>(data); data += sizeof(uint32_t);
     d->blockLengthSize = d->blocksNum + padding; // Padded to ensure SparseIndex[]
