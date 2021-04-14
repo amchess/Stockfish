@@ -16,32 +16,34 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//Definition of input features HalfKP of NNUE evaluation function
+//Definition of input features HalfKAE5 of NNUE evaluation function
 
-#ifndef NNUE_FEATURES_HALF_KP_H_INCLUDED
-#define NNUE_FEATURES_HALF_KP_H_INCLUDED
+#ifndef NNUE_FEATURES_HALF_KAE5_H_INCLUDED
+#define NNUE_FEATURES_HALF_KAE5_H_INCLUDED
 
 #include "../../evaluate.h"
 #include "features_common.h"
 
+#include <utility>
+
 namespace Stockfish::Eval::NNUE::Features {
 
-  // Feature HalfKP: Combination of the position of own king
+  // Feature HalfKAE5: Combination of the position of own king
   // and the position of pieces other than kings
   template <Side AssociatedKing>
-  class HalfKP {
+  class HalfKAE5 {
 
    public:
     // Feature name
-    static constexpr const char* kName = "HalfKP(Friend)";
+    static constexpr const char* kName = "HalfKAE5(Friend)";
     // Hash value embedded in the evaluation file
     static constexpr std::uint32_t kHashValue =
-        0x5D69D5B9u ^ (AssociatedKing == Side::kFriend);
+        0x5F1123B9u ^ (AssociatedKing == Side::kFriend);
     // Number of feature dimensions
     static constexpr IndexType kDimensions =
-        static_cast<IndexType>(SQUARE_NB) * static_cast<IndexType>(PS_END);
+        static_cast<IndexType>(SQUARE_NB) * static_cast<IndexType>(PS_END2) * 5;
     // Maximum number of simultaneously active features
-    static constexpr IndexType kMaxActiveDimensions = 30; // Kings don't count
+    static constexpr IndexType kMaxActiveDimensions = 32; // Kings don't count
     // Trigger for full calculation instead of difference calculation
     static constexpr TriggerEvent kRefreshTrigger = TriggerEvent::kFriendKingMoved;
 
@@ -52,6 +54,17 @@ namespace Stockfish::Eval::NNUE::Features {
     // Get a list of indices for recently changed features
     static void AppendChangedIndices(const Position& pos, const DirtyPiece& dp, Color perspective,
                                      IndexList* removed, IndexList* added);
+    private:
+        // Index of a feature for a given king position and another piece on some square
+        static IndexType make_index(Color perspective, Square s, Piece pc, Square sq_k, Bitboard mobility[COLOR_NB][3]);
+
+        static std::pair<IndexType, IndexType> make_index_2(
+            Color perspective,
+            Square s,
+            Piece pc,
+            Square sq_k,
+            Bitboard prev_mobility[COLOR_NB][3],
+            Bitboard curr_mobility[COLOR_NB][3]);									 
   };
 
 }  // namespace Stockfish::Eval::NNUE::Features

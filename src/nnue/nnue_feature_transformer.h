@@ -109,6 +109,12 @@ namespace Stockfish::Eval::NNUE {
       return RawFeatures::kHashValue ^ kOutputDimensions;
     }
 
+    void prefetch_feature_weights(IndexType feature)
+    {
+      for (IndexType offset = 0; offset < kHalfDimensions; offset += 64)
+        _mm_prefetch(&weights_[kHalfDimensions * feature + offset], _MM_HINT_T0);
+    }
+	
     // Read network parameters
     bool ReadParameters(std::istream& stream) {
 
@@ -271,15 +277,15 @@ namespace Stockfish::Eval::NNUE {
         // Update incrementally in two steps. First, we update the "next"
         // accumulator. Then, we update the current accumulator (pos.state()).
 
-        // Gather all features to be updated. This code assumes HalfKP features
+        // Gather all features to be updated. This code assumes HalfKAE5 features
         // only and doesn't support refresh triggers.
-        static_assert(std::is_same_v<Features::FeatureSet<Features::HalfKP<Features::Side::kFriend>>,
+        static_assert(std::is_same_v<Features::FeatureSet<Features::HalfKAE5<Features::Side::kFriend>>,
                                      RawFeatures>);
         Features::IndexList removed[2], added[2];
-        Features::HalfKP<Features::Side::kFriend>::AppendChangedIndices(pos,
+        Features::HalfKAE5<Features::Side::kFriend>::AppendChangedIndices(pos,
             next->dirtyPiece, c, &removed[0], &added[0]);
         for (StateInfo *st2 = pos.state(); st2 != next; st2 = st2->previous)
-          Features::HalfKP<Features::Side::kFriend>::AppendChangedIndices(pos,
+          Features::HalfKAE5<Features::Side::kFriend>::AppendChangedIndices(pos,
               st2->dirtyPiece, c, &removed[1], &added[1]);
 
         // Mark the accumulators as computed.
@@ -360,7 +366,7 @@ namespace Stockfish::Eval::NNUE {
         auto& accumulator = pos.state()->accumulator;
         accumulator.state[c] = COMPUTED;
         Features::IndexList active;
-        Features::HalfKP<Features::Side::kFriend>::AppendActiveIndices(pos, c, &active);
+        Features::HalfKAE5<Features::Side::kFriend>::AppendActiveIndices(pos, c, &active);
 
   #ifdef VECTOR
         for (IndexType j = 0; j < kHalfDimensions / kTileHeight; ++j)

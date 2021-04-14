@@ -77,6 +77,11 @@ namespace Stockfish::Eval::NNUE {
     Detail::Initialize(network);
   }
 
+  void prefetch_feature_weights(IndexType feature)
+  {
+    feature_transformer->prefetch_feature_weights(feature);
+  }
+  
   // Read network header
   bool ReadHeader(std::istream& stream, std::uint32_t* hash_value, std::string* architecture)
   {
