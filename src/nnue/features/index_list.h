@@ -24,6 +24,10 @@
 #include "../../position.h"
 #include "../nnue_architecture.h"
 
+namespace Stockfish::Eval::NNUE {
+  void prefetch_feature_weights(IndexType feature);
+}
+
 namespace Stockfish::Eval::NNUE::Features {
 
   // Class template used for feature index list
@@ -57,8 +61,14 @@ namespace Stockfish::Eval::NNUE::Features {
   //Type of feature index list
   class IndexList
       : public ValueList<IndexType, RawFeatures::kMaxActiveDimensions> {
-  };
+    using BaseType = ValueList<IndexType, RawFeatures::kMaxActiveDimensions>;
 
+public:
+    void push_back(const IndexType& value) {
+      prefetch_feature_weights(value);
+      BaseType::push_back(value);
+    }
+  };  
 }  // namespace Stockfish::Eval::NNUE::Features
 
 #endif // NNUE_FEATURES_INDEX_LIST_H_INCLUDED
