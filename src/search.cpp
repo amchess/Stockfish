@@ -34,9 +34,7 @@
 #include "tt.h"
 #include "uci.h"
 #include "syzygy/tbprobe.h"
-
 namespace Stockfish {
-
 namespace Search {
 
   LimitsType Limits;
@@ -191,20 +189,16 @@ namespace {
 
 
 /// Search::init() is called at startup to initialize various lookup tables
-
 void Search::init() {
 
   for (int i = 1; i < MAX_MOVES; ++i)
       Reductions[i] = int((21.3 + 2 * std::log(Threads.size())) * std::log(i + 0.25 * std::log(i)));
 }
-
-
 /// Search::clear() resets search state to its initial value
 
 void Search::clear() {
 
   Threads.main()->wait_for_search_finished();
-
   Time.availableNodes = 0;
   TT.clear();
   Threads.clear();
@@ -609,7 +603,6 @@ namespace {
          ttCapture, singularQuietLMR;
     Piece movedPiece;
     int moveCount, captureCount, quietCount;
-
     // Step 1. Initialize node
     Thread* thisThread = pos.this_thread();
     ss->inCheck        = pos.checkers();
@@ -724,7 +717,6 @@ namespace {
         if (pos.rule50_count() < 90)
             return ttValue;
     }
-
     // Step 5. Tablebases probe
     if (!rootNode && TB::Cardinality)
     {
@@ -916,7 +908,6 @@ namespace {
             return probCutBeta;
 
         assert(probCutBeta < VALUE_INFINITE);
-
         MovePicker mp(pos, ttMove, probCutBeta - ss->staticEval, &captureHistory);
         int probCutCount = 0;
         bool ttPv = ss->ttPv;
@@ -1121,7 +1112,6 @@ moves_loop: // When in check, search starts from here
       {
           Value singularBeta = ttValue - ((formerPv + 4) * depth) / 2;
           Depth singularDepth = (depth - 1 + 3 * formerPv) / 2;
-
           ss->excludedMove = move;
           value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
           ss->excludedMove = MOVE_NONE;
@@ -2032,6 +2022,7 @@ void Tablebases::rank_root_moves(Position& pos, Search::RootMoves& rootMoves) {
         for (auto& m : rootMoves)
             m.tbRank = 0;
     }
+
 }
 
 } // namespace Stockfish

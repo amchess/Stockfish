@@ -18,7 +18,16 @@
 
 // Code for calculating NNUE evaluation function
 
+#include "evaluate_nnue.h"
+
+#include "../position.h"
+#include "../misc.h"
+#include "../uci.h"
+#include "../types.h"
+
 #include <iostream>
+#include <string>
+#include <fstream>
 #include <set>
 
 #include "../evaluate.h"
@@ -31,6 +40,27 @@
 
 namespace Stockfish::Eval::NNUE {
 
+  const uint32_t kpp_board_index[PIECE_NB][COLOR_NB] = {
+   // convention: W - us, B - them
+   // viewed from other side, W and B are reversed
+      { PS_NONE,     PS_NONE     },
+      { PS_W_PAWN,   PS_B_PAWN   },
+      { PS_W_KNIGHT, PS_B_KNIGHT },
+      { PS_W_BISHOP, PS_B_BISHOP },
+      { PS_W_ROOK,   PS_B_ROOK   },
+      { PS_W_QUEEN,  PS_B_QUEEN  },
+      { PS_KING,     PS_KING     },
+      { PS_NONE,     PS_NONE     },
+      { PS_NONE,     PS_NONE     },
+      { PS_B_PAWN,   PS_W_PAWN   },
+      { PS_B_KNIGHT, PS_W_KNIGHT },
+      { PS_B_BISHOP, PS_W_BISHOP },
+      { PS_B_ROOK,   PS_W_ROOK   },
+      { PS_B_QUEEN,  PS_W_QUEEN  },
+      { PS_KING,     PS_KING     },
+      { PS_NONE,     PS_NONE     }
+  };
+
   // Input feature converter
   LargePagePtr<FeatureTransformer> feature_transformer;
 
@@ -40,18 +70,35 @@ namespace Stockfish::Eval::NNUE {
   // Evaluation function file name
   std::string fileName;
 
+  // Saved evaluation function file name
+  std::string savedfileName = "nn.bin";
+
+  // Get a string that represents the structure of the evaluation function
+  std::string get_architecture_string() {
+    return "Features=" + FeatureTransformer::get_structure_string() +
+        ",Network=" + Network::get_structure_string();
+  }
+
+  std::string get_layers_info() {
+    return
+        FeatureTransformer::get_layers_info()
+        + '\n' + Network::get_layers_info();
+  }
+
+  std::string eval_file_loaded = "None";
+
   namespace Detail {
 
   // Initialize the evaluation function parameters
   template <typename T>
-  void Initialize(AlignedPtr<T>& pointer) {
+  void initialize(AlignedPtr<T>& pointer) {
 
     pointer.reset(reinterpret_cast<T*>(std_aligned_alloc(alignof(T), sizeof(T))));
     std::memset(pointer.get(), 0, sizeof(T));
   }
 
   template <typename T>
-  void Initialize(LargePagePtr<T>& pointer) {
+  void initialize(LargePagePtr<T>& pointer) {
 
     static_assert(alignof(T) <= 4096, "aligned_large_pages_alloc() may fail for such a big alignment requirement of T");
     pointer.reset(reinterpret_cast<T*>(aligned_large_pages_alloc(sizeof(T))));
@@ -68,22 +115,35 @@ namespace Stockfish::Eval::NNUE {
     return reference.ReadParameters(stream);
   }
 
+  // write evaluation function parameters
+  template <typename T>
+  bool WriteParameters(std::ostream& stream, const AlignedPtr<T>& pointer) {
+    constexpr std::uint32_t header = T::GetHashValue();
+
+    stream.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+    return pointer->WriteParameters(stream);
+  }
+
+  template <typename T>
+  bool WriteParameters(std::ostream& stream, const LargePagePtr<T>& pointer) {
+    constexpr std::uint32_t header = T::GetHashValue();
+
+    stream.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+    return pointer->WriteParameters(stream);
+  }
   }  // namespace Detail
 
   // Initialize the evaluation function parameters
-  void Initialize() {
+  void initialize() {
 
-    Detail::Initialize(feature_transformer);
-    Detail::Initialize(network);
+    Detail::initialize(feature_transformer);
+    Detail::initialize(network);
   }
 
-  void prefetch_feature_weights(IndexType feature)
-  {
-    feature_transformer->prefetch_feature_weights(feature);
-  }
-  
   // Read network header
-  bool ReadHeader(std::istream& stream, std::uint32_t* hash_value, std::string* architecture)
+  bool read_header(std::istream& stream, std::uint32_t* hash_value, std::string* architecture)
   {
     std::uint32_t version, size;
 
@@ -95,18 +155,53 @@ namespace Stockfish::Eval::NNUE {
     stream.read(&(*architecture)[0], size);
     return !stream.fail();
   }
+  
+  void prefetch_feature_weights(IndexType feature)
+  {
+    feature_transformer->prefetch_feature_weights(feature);
+  }
+
+  // write the header
+  bool write_header(std::ostream& stream,
+    std::uint32_t hash_value, const std::string& architecture) {
+
+    stream.write(reinterpret_cast<const char*>(&kVersion), sizeof(kVersion));
+    stream.write(reinterpret_cast<const char*>(&hash_value), sizeof(hash_value));
+
+    const std::uint32_t size = static_cast<std::uint32_t>(architecture.size());
+
+    stream.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    stream.write(architecture.data(), size);
+
+    return !stream.fail();
+  }
 
   // Read network parameters
   bool ReadParameters(std::istream& stream) {
 
     std::uint32_t hash_value;
     std::string architecture;
-    if (!ReadHeader(stream, &hash_value, &architecture)) return false;
+    if (!read_header(stream, &hash_value, &architecture)) return false;
     if (hash_value != kHashValue) return false;
     if (!Detail::ReadParameters(stream, *feature_transformer)) return false;
     if (!Detail::ReadParameters(stream, *network)) return false;
     return stream && stream.peek() == std::ios::traits_type::eof();
   }
+
+  // write evaluation function parameters
+  bool WriteParameters(std::ostream& stream) {
+
+    if (!write_header(stream, kHashValue, get_architecture_string()))
+        return false;
+
+    if (!Detail::WriteParameters(stream, feature_transformer))
+        return false;
+
+    if (!Detail::WriteParameters(stream, network))
+        return false;
+
+    return !stream.fail();
+}
 
   // Evaluation function. Perform differential calculation.
   Value evaluate(const Position& pos) {
@@ -141,9 +236,8 @@ namespace Stockfish::Eval::NNUE {
   // Load eval, from a file stream or a memory stream
   bool load_eval(std::string name, std::istream& stream) {
 
-    Initialize();
+    initialize();
     fileName = name;
     return ReadParameters(stream);
-  }
-
+}
 } // namespace Stockfish::Eval::NNUE

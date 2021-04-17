@@ -450,6 +450,7 @@ constexpr Square to_sq(Move m) {
   return Square(m & 0x3F);
 }
 
+
 constexpr int from_to(Move m) {
  return m & 0xFFF;
 }

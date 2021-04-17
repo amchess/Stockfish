@@ -24,6 +24,7 @@
 #include <ostream>
 #include <string>
 #include <vector>
+
 #include <cstdint>
 
 #include "types.h"
@@ -77,6 +78,7 @@ T* align_ptr_up(T* ptr)
   const uintptr_t ptrint = reinterpret_cast<uintptr_t>(reinterpret_cast<char*>(ptr));
   return reinterpret_cast<T*>(reinterpret_cast<char*>((ptrint + (Alignment - 1)) / Alignment * Alignment));
 }
+
 
 /// xorshift64star Pseudo-Random Number Generator
 /// This class is based on original code written and dedicated
@@ -144,7 +146,6 @@ namespace CommandLine {
   extern std::string binaryDirectory;  // path of the executable directory
   extern std::string workingDirectory; // path of the working directory
 }
-
 } // namespace Stockfish
 
 #endif // #ifndef MISC_H_INCLUDED

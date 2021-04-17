@@ -68,10 +68,10 @@ struct MoveList {
     return std::find(begin(), end(), move) != end();
   }
 
+
 private:
   ExtMove moveList[MAX_MOVES], *last;
 };
-
 } // namespace Stockfish
 
 #endif // #ifndef MOVEGEN_H_INCLUDED

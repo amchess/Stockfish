@@ -61,6 +61,7 @@ namespace Stockfish::Eval::NNUE::Features {
   //Type of feature index list
   class IndexList
       : public ValueList<IndexType, RawFeatures::kMaxActiveDimensions> {
+
     using BaseType = ValueList<IndexType, RawFeatures::kMaxActiveDimensions>;
 
 public:

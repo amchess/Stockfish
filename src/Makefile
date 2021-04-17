@@ -483,7 +483,6 @@ ifeq ($(optimize),yes)
 			CXXFLAGS += -mdynamic-no-pic
 		endif
 	endif
-
 	ifeq ($(comp),clang)
 		CXXFLAGS += -fexperimental-new-pass-manager
 	endif
@@ -750,6 +749,7 @@ clean: objclean profileclean
 	@rm -f .depend *~ core
 
 # evaluation network (nnue)
+
 # clean binaries and objects
 objclean:
 	@rm -f $(EXE) *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o

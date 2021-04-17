@@ -28,7 +28,6 @@ namespace Stockfish {
 class Position;
 
 namespace Eval {
-
   std::string trace(const Position& pos);
   Value evaluate(const Position& pos);
 

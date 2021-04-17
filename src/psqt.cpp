@@ -107,6 +107,7 @@ namespace PSQT
 
 Score psq[PIECE_NB][SQUARE_NB];
 
+
 // PSQT::init() initializes piece-square tables: the white halves of the tables are
 // copied from Bonus[] and PBonus[], adding the piece value, then the black halves of
 // the tables are initialized by flipping and changing the sign of the white scores.
@@ -127,5 +128,4 @@ void init() {
 }
 
 } // namespace PSQT
-
 } // namespace Stockfish

@@ -21,8 +21,17 @@
 #ifndef NNUE_COMMON_H_INCLUDED
 #define NNUE_COMMON_H_INCLUDED
 
+#include "../types.h"
+
 #include <cstring>
 #include <iostream>
+#if defined(__GNUC__ ) && (__GNUC__ < 8)
+#include <experimental/filesystem>
+namespace sys = std::experimental::filesystem;
+#else
+#include <filesystem>
+namespace sys = std::filesystem;
+#endif
 
 #if defined(USE_AVX2)
 #include <immintrin.h>
@@ -89,14 +98,7 @@ namespace Stockfish::Eval::NNUE {
     PS_END2     = 11 * SQUARE_NB + 1
   };
 
-  constexpr uint32_t kpp_board_index[COLOR_NB][PIECE_NB] = {
-    // convention: W - us, B - them
-    // viewed from other side, W and B are reversed
-    { PS_NONE, PS_W_PAWN, PS_W_KNIGHT, PS_W_BISHOP, PS_W_ROOK, PS_W_QUEEN, PS_KING, PS_NONE,
-      PS_NONE, PS_B_PAWN, PS_B_KNIGHT, PS_B_BISHOP, PS_B_ROOK, PS_B_QUEEN, PS_KING, PS_NONE },
-    { PS_NONE, PS_B_PAWN, PS_B_KNIGHT, PS_B_BISHOP, PS_B_ROOK, PS_B_QUEEN, PS_KING, PS_NONE,
-      PS_NONE, PS_W_PAWN, PS_W_KNIGHT, PS_W_BISHOP, PS_W_ROOK, PS_W_QUEEN, PS_KING, PS_NONE }
-  };
+  extern const uint32_t kpp_board_index[PIECE_NB][COLOR_NB];
 
   // Type of input feature after conversion
   using TransformedFeatureType = std::uint8_t;

@@ -35,7 +35,6 @@
 using namespace std;
 
 namespace Stockfish {
-
 extern vector<string> setup_bench(const Position&, istream&);
 
 namespace {
@@ -69,7 +68,6 @@ namespace {
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
     pos.set(fen, Options["UCI_Chess960"], &states->back(), Threads.main());
-
     // Parse move list (if any)
     while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
     {
@@ -279,7 +277,6 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (!token.empty() && token[0] != '#')
           sync_cout << "Unknown command: " << cmd << sync_endl;
-
   } while (token != "quit" && argc == 1); // Command line args are one-shot
 }
 

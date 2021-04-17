@@ -21,7 +21,6 @@
 
 #include "misc.h"
 #include "types.h"
-
 namespace Stockfish {
 
 /// TTEntry struct is the 10 bytes transposition table entry, defined as below:
@@ -79,7 +78,6 @@ class TranspositionTable {
   static constexpr int      GENERATION_DELTA = (1 << GENERATION_BITS);           // increment for generation field
   static constexpr int      GENERATION_CYCLE = 255 + (1 << GENERATION_BITS);     // cycle length
   static constexpr int      GENERATION_MASK  = (0xFF << GENERATION_BITS) & 0xFF; // mask to pull out generation number
-
 public:
  ~TranspositionTable() { aligned_large_pages_free(table); }
   void new_search() { generation8 += GENERATION_DELTA; } // Lower bits are used for other things

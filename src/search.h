@@ -107,7 +107,6 @@ void init();
 void clear();
 
 } // namespace Search
-
 } // namespace Stockfish
 
 #endif // #ifndef SEARCH_H_INCLUDED

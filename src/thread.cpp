@@ -82,7 +82,6 @@ void Thread::start_searching() {
   cv.notify_one(); // Wake up the thread in idle_loop()
 }
 
-
 /// Thread::wait_for_search_finished() blocks on the condition variable
 /// until the thread has finished searching.
 

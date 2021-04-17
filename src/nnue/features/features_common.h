@@ -33,11 +33,16 @@ namespace Stockfish::Eval::NNUE::Features {
 
   // Trigger to perform full calculations instead of difference only
   enum class TriggerEvent {
-    kFriendKingMoved // calculate full evaluation when own king moves
+    kNone, // Calculate the difference whenever possible
+    kFriendKingMoved, // calculate full evaluation when own king moves
+    kEnemyKingMoved, // calculate full evaluation when opponent king moves
+    kAnyKingMoved, // calculate full evaluation when any king moves
+    kAnyPieceMoved, // always calculate full evaluation
   };
 
   enum class Side {
-    kFriend // side to move
+    kFriend, // side to move
+    kEnemy, // opponent
   };
 
 }  // namespace Stockfish::Eval::NNUE::Features

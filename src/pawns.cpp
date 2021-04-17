@@ -69,7 +69,6 @@ namespace {
     { V(-17), V( -13), V( 100), V(  4), V(  9), V(-16), V(-31) }
   };
 
-
   // KingOnFile[semi-open Us][semi-open Them] contains bonuses/penalties
   // for king when the king is on a semi-open or open file.
   constexpr Score KingOnFile[2][2] = {{ S(-21,10), S(-7, 1)  },
@@ -134,7 +133,6 @@ namespace {
             if (!(ourPawns & shift<Down>(theirPawns | pawn_attacks_bb<Them>(theirPawns))))
                 score -= DoubledEarly;
         }
-
         // A pawn is backward when it is behind all pawns of the same color on
         // the adjacent files and cannot safely advance.
         backward =  !(neighbours & forward_ranks_bb(Them, s + Up))

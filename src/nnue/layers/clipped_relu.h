@@ -23,6 +23,10 @@
 
 #include "../nnue_common.h"
 
+#include <string>
+#include <cstdint>
+#include <type_traits>
+
 namespace Stockfish::Eval::NNUE::Layers {
 
   // Clipped ReLU
@@ -47,6 +51,8 @@ namespace Stockfish::Eval::NNUE::Layers {
     static constexpr std::size_t kBufferSize =
         PreviousLayer::kBufferSize + kSelfBufferSize;
 
+    static constexpr int kLayerIndex = PreviousLayer::kLayerIndex + 1;
+
     // Hash value embedded in the evaluation file
     static constexpr std::uint32_t GetHashValue() {
       std::uint32_t hash_value = 0x538D24C7u;
@@ -54,9 +60,34 @@ namespace Stockfish::Eval::NNUE::Layers {
       return hash_value;
     }
 
+    static std::string get_name() {
+        return "ClippedReLU[" +
+            std::to_string(kOutputDimensions) + "]";
+    }
+
+    // A string that represents the structure from the input layer to this layer
+    static std::string get_structure_string() {
+        return get_name() + "(" +
+            PreviousLayer::get_structure_string() + ")";
+    }
+
+    static std::string get_layers_info() {
+        std::string info = PreviousLayer::get_layers_info();
+        info += "\n  - ";
+        info += std::to_string(kLayerIndex);
+        info += " - ";
+        info += get_name();
+        return info;
+    }
+
     // Read network parameters
     bool ReadParameters(std::istream& stream) {
       return previous_layer_.ReadParameters(stream);
+    }
+
+    // write parameters
+    bool WriteParameters(std::ostream& stream) const {
+        return previous_layer_.WriteParameters(stream);
     }
 
     // Forward propagation
