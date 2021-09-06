@@ -980,7 +980,7 @@ namespace {
     // Initialize score by reading the incrementally updated scores included in
     // the position object (material + piece square tables) and the material
     // imbalance. Score is computed internally from the white point of view.
-    Score score = pos.psq_score() + me->imbalance() + pos.this_thread()->trend;
+    Score score = pos.psq_score() + me->imbalance();
 
     // Probe the pawn hash table
     pe = Pawns::probe(pos);
@@ -1101,7 +1101,7 @@ Value Eval::evaluate(const Position& pos) {
          if (pos.is_chess960())
              nnue += fix_FRC(pos);
 
-         return nnue;
+         return (nnue*4/9);
       };
 
       // If there is PSQ imbalance we use the classical eval, but we switch to
@@ -1139,8 +1139,6 @@ std::string Eval::trace(Position& pos) {
   Value v;
 
   std::memset(scores, 0, sizeof(scores));
-
-  pos.this_thread()->trend = SCORE_ZERO; // Reset any dynamic contempt
 
   v = Evaluation<TRACE>(pos).value();
 
