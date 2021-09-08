@@ -203,6 +203,17 @@ private:
 
 extern std::ostream& operator<<(std::ostream& os, const Position& pos);
 
+inline bool isClassicalEval (const Position& pos)
+{
+    // If there is PSQ imbalance we use the classical eval, but we switch to
+    // NNUE eval faster when shuffling or if the material on the board is high.
+    int r50 = pos.rule50_count ();
+    Value psq = Value (abs (eg_value (pos.psq_score ())));
+    bool classical = psq * 5
+	> (850 + pos.non_pawn_material () / 64) * (5 + r50);
+    return classical;
+}
+
 inline Color Position::side_to_move() const {
   return sideToMove;
 }

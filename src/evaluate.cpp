@@ -980,7 +980,7 @@ namespace {
     // Initialize score by reading the incrementally updated scores included in
     // the position object (material + piece square tables) and the material
     // imbalance. Score is computed internally from the white point of view.
-    Score score = pos.psq_score() + me->imbalance() + pos.this_thread()->trend;
+    Score score = pos.psq_score() + me->imbalance();
 
     // Probe the pawn hash table
     pe = Pawns::probe(pos);
@@ -1077,7 +1077,6 @@ make_v:
 
 } // namespace Eval
 
-
 /// evaluate() is the evaluator for the outer world. It returns a static
 /// evaluation of the position from the point of view of the side to move.
 
@@ -1106,10 +1105,7 @@ Value Eval::evaluate(const Position& pos) {
 
       // If there is PSQ imbalance we use the classical eval, but we switch to
       // NNUE eval faster when shuffling or if the material on the board is high.
-      int r50 = pos.rule50_count();
-      Value psq = Value(abs(eg_value(pos.psq_score())));
-      bool classical = psq * 5 > (850 + pos.non_pawn_material() / 64) * (5 + r50);
-
+      bool classical = isClassicalEval (pos);
       v = classical ? Evaluation<NO_TRACE>(pos).value()  // classical
                     : adjusted_NNUE();                   // NNUE
   }
@@ -1139,8 +1135,6 @@ std::string Eval::trace(Position& pos) {
   Value v;
 
   std::memset(scores, 0, sizeof(scores));
-
-  pos.this_thread()->trend = SCORE_ZERO; // Reset any dynamic contempt
 
   v = Evaluation<TRACE>(pos).value();
 
