@@ -1101,7 +1101,7 @@ Value Eval::evaluate(const Position& pos) {
          if (pos.is_chess960())
              nnue += fix_FRC(pos);
 
-         return nnue;
+         return (nnue*19/22);
       };
 
       // If there is PSQ imbalance we use the classical eval, but we switch to
@@ -1120,7 +1120,7 @@ Value Eval::evaluate(const Position& pos) {
   // Guarantee evaluation does not hit the tablebase range
   v = std::clamp(v, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
 
-  return v;
+  return (v*25/38);
 }
 
 /// trace() is like evaluate(), but instead of returning a value, it returns
