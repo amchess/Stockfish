@@ -56,6 +56,7 @@ public:
   void start_searching();
   void wait_for_search_finished();
   size_t id() const { return idx; }
+  bool is_mcts() const { return isMCTS; }
 
   Pawns::Table pawnsTable;
   Material::Table materialTable;
@@ -64,7 +65,7 @@ public:
   std::atomic<uint64_t> nodes, tbHits, bestMoveChanges;
   int selDepth, nmpMinPly;
   Color nmpColor;
-  Value bestValue, optimism[COLOR_NB];
+  Value bestValue;//, optimism[COLOR_NB];
 
   Position rootPos;
   StateInfo rootState;
@@ -75,7 +76,8 @@ public:
   ButterflyHistory mainHistory;
   CapturePieceToHistory captureHistory;
   ContinuationHistory continuationHistory[2][2];
-  Score trend;
+  //Score trend;
+  bool isMCTS;
 };
 
 
