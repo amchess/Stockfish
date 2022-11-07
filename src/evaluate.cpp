@@ -1065,23 +1065,18 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
       int nnueComplexity;
       int scale = 1064 + 106 * pos.non_pawn_material() / 5120;
 
-      Color stm = pos.side_to_move();
-      Value optimism = pos.this_thread()->optimism[stm];
-
       Value nnue = NNUE::evaluate(pos, true, &nnueComplexity);
 
       // Blend nnue complexity with (semi)classical complexity
       nnueComplexity = (  416 * nnueComplexity
                         + 424 * abs(psq - nnue)
-                        + (optimism  > 0 ? int(optimism) * int(psq - nnue) : 0)
                         ) / 1024;
 
       // Return hybrid NNUE complexity to caller
       if (complexity)
           *complexity = nnueComplexity;
 
-      optimism = optimism * (269 + nnueComplexity) / 256;
-      v = (nnue * scale + optimism * (scale - 754)) / 1024;
+      v = (nnue * scale) / 1024;
   }
 
   // Damp down the evaluation linearly when shuffling
@@ -1116,8 +1111,6 @@ std::string Eval::trace(Position& pos) {
 
   // Reset any global variable used in eval
   pos.this_thread()->bestValue       = VALUE_ZERO;
-  pos.this_thread()->optimism[WHITE] = VALUE_ZERO;
-  pos.this_thread()->optimism[BLACK] = VALUE_ZERO;
 
   v = Evaluation<TRACE>(pos).value();
 
