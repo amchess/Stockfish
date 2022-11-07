@@ -58,13 +58,12 @@ endif
 ### Source and object files
 SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp \
 	material.cpp misc.cpp movegen.cpp movepick.cpp pawns.cpp position.cpp psqt.cpp \
-	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp \
-	mcts/montecarlo.cpp syzygy/tbprobe.cpp \
+	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp syzygy/tbprobe.cpp \
 	nnue/evaluate_nnue.cpp nnue/features/half_ka_v2_hm.cpp
 
 OBJS = $(notdir $(SRCS:.cpp=.o))
 
-VPATH = mcts:syzygy:nnue:nnue/features
+VPATH = syzygy:nnue:nnue/features
 
 ### ==========================================================================
 ### Section 2. High-level Configuration
@@ -683,6 +682,18 @@ ifeq ($(pext),yes)
 	endif
 endif
 
+### 3.7.1 Try to include git commit sha for versioning
+GIT_SHA = $(shell git rev-parse --short HEAD 2>/dev/null)
+ifneq ($(GIT_SHA), )
+	CXXFLAGS += -DGIT_SHA=\"$(GIT_SHA)\"
+endif
+
+### 3.7.2 Try to include git commit date for versioning
+GIT_DATE = $(shell git show -s --date=format:'%Y%m%d' --format=%cd HEAD 2>/dev/null)
+ifneq ($(GIT_DATE), )
+	CXXFLAGS += -DGIT_DATE=\"$(GIT_DATE)\"
+endif
+
 ### 3.8 Link Time Optimization
 ### This is a mix of compile and link time options because the lto link phase
 ### needs access to the optimization flags.
@@ -801,7 +812,7 @@ endif
 
 .PHONY: help build profile-build strip install clean net objclean profileclean \
         config-sanity icc-profile-use icc-profile-make gcc-profile-use gcc-profile-make \
-        clang-profile-use clang-profile-make
+        clang-profile-use clang-profile-make FORCE
 
 build: net config-sanity
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) all
@@ -948,6 +959,10 @@ config-sanity: net
 
 $(EXE): $(OBJS)
 	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)
+
+# Force recompilation to ensure version info is up-to-date
+misc.o: FORCE
+FORCE:
 
 clang-profile-make:
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) \
