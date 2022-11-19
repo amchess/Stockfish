@@ -1080,7 +1080,8 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
       if (complexity)
           *complexity = nnueComplexity;
 
-      optimism = optimism * (269 + nnueComplexity) / 256;
+      Value noOptimismValue= (nnue * scale * 53) / 91136;
+      optimism = (abs(noOptimismValue) <= 35 * UCI::NormalizeToPawnValue/100) ? (Value)(0) : (optimism * (269 + nnueComplexity) / 256);
       v = (nnue * scale + optimism * (scale - 754)) / 1024;
   }
 
