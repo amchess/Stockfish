@@ -278,6 +278,30 @@ struct DirtyPiece {
   Square to[3];
 };
 
+inline Value getForOptimismValue(Value score) 
+{
+   Value outputValue = (Value)((float)(score) * 32 / 89);
+ 
+  if ((int)outputValue < -35 * PawnValueEg/ 100) {
+	  return (Value)((float)(score) * 52/ 89);
+  }
+  if (((int)outputValue >= -35 * PawnValueEg/ 100)
+		  && ((int)outputValue <= -15 * PawnValueEg/100)) {
+	  return (Value)((float)(score) * 42 / 89);
+  }
+  if (((int)outputValue < 15 * PawnValueEg/ 100)) {
+	  return (Value)((float)(score) * 32 / 89);
+  }
+  if (((int)outputValue >= 15 * PawnValueEg/ 100)
+		  && ((int)outputValue <= 35 * PawnValueEg/ 100)) {
+	  return (Value)((float)(score) * 42 / 89);
+  }
+  if ((int)outputValue > 35 * PawnValueEg/ 100) {
+	  return (Value)((float)(score) * 52 / 89);
+  }
+  return outputValue;
+}
+
 /// Score enum stores a middlegame and an endgame value in a single integer (enum).
 /// The least significant 16 bits are used to store the middlegame value and the
 /// upper 16 bits are used to store the endgame value. We have to take care to
