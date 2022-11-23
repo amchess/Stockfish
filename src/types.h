@@ -283,11 +283,11 @@ inline Value getForOptimismValue(Value score)
    Value outputValue = (Value)((float)(score) * 32 / 89);
  
   if ((int)outputValue < -35 * PawnValueEg/ 100) {
-	  return (Value)((float)(score) * 52/ 89);
+	  return (Value)((float)(score) * 11/ 89);
   }
   if (((int)outputValue >= -35 * PawnValueEg/ 100)
 		  && ((int)outputValue <= -15 * PawnValueEg/100)) {
-	  return (Value)((float)(score) * 42 / 89);
+	  return (Value)((float)(score) * 21 / 89);
   }
   if (((int)outputValue < 15 * PawnValueEg/ 100)) {
 	  return (Value)((float)(score) * 32 / 89);
