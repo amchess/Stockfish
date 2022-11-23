@@ -1078,9 +1078,11 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
 
       // Return hybrid NNUE complexity to caller
       if (complexity)
+	  {
           *complexity = nnueComplexity;
-
-      optimism = optimism * (269 + nnueComplexity) / 256;
+	  }
+	  Value noOptimismValue= getForOptimismValue((nnue * scale) / 1024);
+	  optimism = (abs(noOptimismValue) < 15 * PawnValueEg / 100) ? (Value)(0) : (optimism * (269 + nnueComplexity) / 256);	  
       v = (nnue * scale + optimism * (scale - 754)) / 1024;
   }
 
