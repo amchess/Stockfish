@@ -1043,8 +1043,8 @@ make_v:
   }
 
 } // namespace Eval
-  //align score begin
-inline float getWeight(Value npm, float openingMiddlegameWeight) 
+//align score begin
+inline float getWeightByPhase(Value npm, float openingMiddlegameWeight) 
 {
     return ((float)(openingMiddlegameWeight-1)*(float)(npm-3915)/(float)11343)+1;
 } 
@@ -1053,22 +1053,23 @@ inline Value getForOptimismValue(Value score,const Position& pos)
   Value npm_w = pos.non_pawn_material(WHITE);
   Value npm_b = pos.non_pawn_material(BLACK);
   Value npm   = std::clamp(npm_w + npm_b, EndgameLimit, MidgameLimit); 
+  
   if ((int)score < -35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score)/ getWeight(npm,88 / 91) );
+	  return (Value)((float)(score)/ getWeightByPhase(npm,88 / 91) );
   }
   if (((int)score >= -35 * UCI::NormalizeToPawnValue/ 100)
 		  && ((int)score <= -15 * UCI::NormalizeToPawnValue/100)) {
-	  return (Value)((float)(score) / getWeight(npm,88 / 75));
+	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 75));
   }
   if (((int)score < 15 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeight(npm,88 / 57) );
+	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 57) );
   }
   if (((int)score >= 15 * UCI::NormalizeToPawnValue/ 100)
 		  && ((int)score <= 35 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeight(npm,88 / 75));
+	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 75));
   }
   if ((int)score > 35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score) / getWeight(npm,88 / 91));
+	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 91));
   }
   return score;
 }
