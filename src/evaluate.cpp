@@ -1048,28 +1048,27 @@ inline float getWeightByPhase(Value npm, float openingMiddlegameWeight)
 {
     return ((float)(openingMiddlegameWeight-1)*(float)(npm-3915)/(float)11343)+1;
 } 
-inline Value getForOptimismValue(Value score,const Position& pos) 
+inline Value getInternalValue(Value score,const Position& pos) 
 {
   Value npm_w = pos.non_pawn_material(WHITE);
   Value npm_b = pos.non_pawn_material(BLACK);
   Value npm   = std::clamp(npm_w + npm_b, EndgameLimit, MidgameLimit); 
-  
   if ((int)score < -35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score)/ getWeightByPhase(npm,88 / 91) );
+	  return (Value)((float)(score)/ getWeightByPhase(npm,(float)88 / (float)91) );
   }
   if (((int)score >= -35 * UCI::NormalizeToPawnValue/ 100)
 		  && ((int)score <= -15 * UCI::NormalizeToPawnValue/100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 75));
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)75));
   }
   if (((int)score < 15 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 57) );
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)57) );
   }
   if (((int)score >= 15 * UCI::NormalizeToPawnValue/ 100)
 		  && ((int)score <= 35 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 75));
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)75));
   }
   if ((int)score > 35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,88 / 91));
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)91));
   }
   return score;
 }
@@ -1112,7 +1111,7 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
 	  {
           *complexity = nnueComplexity;
 	  }
-	  Value noOptimismValue= getForOptimismValue((nnue * scale) / 1024, pos);
+	  Value noOptimismValue= getInternalValue((nnue * scale) / 1024, pos);
 	  optimism = (abs(noOptimismValue) < 15 * UCI::NormalizeToPawnValue / 100) ? (Value)(0) : (optimism * (278 + nnueComplexity) / 256);	  
       v = (nnue * scale + optimism * (scale - 755)) / 1024;
   }
@@ -1122,11 +1121,10 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
 
   // Guarantee evaluation does not hit the tablebase range
   v = std::clamp(v, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
-
   // When not using NNUE, return classical complexity to caller
   if (complexity && useClassical)
       *complexity = abs(v - psq);
-
+  v=getInternalValue(v, pos);
   return v;
 }
 
