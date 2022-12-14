@@ -1124,7 +1124,6 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
   // When not using NNUE, return classical complexity to caller
   if (complexity && useClassical)
       *complexity = abs(v - psq);
-  v=getInternalValue(v, pos);
   return v;
 }
 
