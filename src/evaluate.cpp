@@ -1054,21 +1054,21 @@ inline Value getInternalValue(Value score,const Position& pos)
   Value npm_b = pos.non_pawn_material(BLACK);
   Value npm   = std::clamp(npm_w + npm_b, EndgameLimit, MidgameLimit); 
   if ((int)score < -35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score)/ getWeightByPhase(npm,(float)88 / (float)91) );
+	  return (Value)((float)(score)/ getWeightByPhase(npm,(float)88 / (float)75) );
   }
   if (((int)score >= -35 * UCI::NormalizeToPawnValue/ 100)
 		  && ((int)score <= -15 * UCI::NormalizeToPawnValue/100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)75));
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)57));
   }
   if (((int)score < 15 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)57) );
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)39) );
   }
   if (((int)score >= 15 * UCI::NormalizeToPawnValue/ 100)
 		  && ((int)score <= 35 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)75));
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)57));
   }
   if ((int)score > 35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)91));
+	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)39));
   }
   return score;
 }
@@ -1124,7 +1124,6 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
   // When not using NNUE, return classical complexity to caller
   if (complexity && useClassical)
       *complexity = abs(v - psq);
-  v=getInternalValue(v, pos);
   return v;
 }
 
