@@ -1043,37 +1043,6 @@ make_v:
   }
 
 } // namespace Eval
-//align score begin
-inline float getWeightByPhase(Value npm, float openingMiddlegameWeight) 
-{
-    return ((float)(openingMiddlegameWeight-1)*(float)(npm-3915)/(float)11343)+1;
-} 
-inline Value getInternalValue(Value score,const Position& pos) 
-{
-  Value npm_w = pos.non_pawn_material(WHITE);
-  Value npm_b = pos.non_pawn_material(BLACK);
-  Value npm   = std::clamp(npm_w + npm_b, EndgameLimit, MidgameLimit); 
-  if ((int)score < -35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score)/ getWeightByPhase(npm,(float)88 / (float)75) );
-  }
-  if (((int)score >= -35 * UCI::NormalizeToPawnValue/ 100)
-		  && ((int)score <= -15 * UCI::NormalizeToPawnValue/100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)57));
-  }
-  if (((int)score < 15 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)39) );
-  }
-  if (((int)score >= 15 * UCI::NormalizeToPawnValue/ 100)
-		  && ((int)score <= 35 * UCI::NormalizeToPawnValue/ 100)) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)57));
-  }
-  if ((int)score > 35 * UCI::NormalizeToPawnValue/ 100) {
-	  return (Value)((float)(score) / getWeightByPhase(npm,(float)88 / (float)39));
-  }
-  return score;
-}
-
-//align score end
 
 /// evaluate() is the evaluator for the outer world. It returns a static
 /// evaluation of the position from the point of view of the side to move.
@@ -1111,8 +1080,7 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
 	  {
           *complexity = nnueComplexity;
 	  }
-	  Value noOptimismValue= getInternalValue((nnue * scale) / 1024, pos);
-	  optimism = (abs(noOptimismValue) < 15 * UCI::NormalizeToPawnValue / 100) ? (Value)(0) : (optimism * (278 + nnueComplexity) / 256);	  
+	  optimism = (abs((nnue * scale) / 1024) < 17 * UCI::NormalizeToPawnValue / 100) ? (Value)(0) : (optimism * (278 + nnueComplexity) / 256);	  
       v = (nnue * scale + optimism * (scale - 755)) / 1024;
   }
 
