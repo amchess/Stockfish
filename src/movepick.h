@@ -1,6 +1,6 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2021 The Stockfish developers (see AUTHORS file)
+  Copyright (C) 2004-2023 The Stockfish developers (see AUTHORS file)
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -86,13 +86,8 @@ enum StatsType { NoCaptures, Captures };
 /// unsuccessful during the current search, and is used for reduction and move
 /// ordering decisions. It uses 2 tables (one for each color) indexed by
 /// the move's from and to squares, see www.chessprogramming.org/Butterfly_Boards
-typedef Stats<int16_t, 13365, COLOR_NB, int(SQUARE_NB) * int(SQUARE_NB)> ButterflyHistory;
-
-/// At higher depths LowPlyHistory records successful quiet moves near the root
-/// and quiet moves which are/were in the PV (ttPv). It is cleared with each new
-/// search and filled during iterative deepening.
-constexpr int MAX_LPH = 4;
-typedef Stats<int16_t, 10692, MAX_LPH, int(SQUARE_NB) * int(SQUARE_NB)> LowPlyHistory;
+/// (~11 elo)
+typedef Stats<int16_t, 7183, COLOR_NB, int(SQUARE_NB) * int(SQUARE_NB)> ButterflyHistory;
 
 /// CounterMoveHistory stores counter moves indexed by [piece][to] of the previous
 /// move, see www.chessprogramming.org/Countermove_Heuristic
@@ -107,6 +102,7 @@ typedef Stats<int16_t, 29952, PIECE_NB, SQUARE_NB> PieceToHistory;
 /// ContinuationHistory is the combined history of a given pair of moves, usually
 /// the current one given a previous one. The nested history table is based on
 /// PieceToHistory instead of ButterflyBoards.
+/// (~63 elo)
 typedef Stats<PieceToHistory, NOT_USED, PIECE_NB, SQUARE_NB> ContinuationHistory;
 
 
@@ -123,19 +119,19 @@ class MovePicker {
 public:
   MovePicker(const MovePicker&) = delete;
   MovePicker& operator=(const MovePicker&) = delete;
-  MovePicker(const Position&, Move, Value, const CapturePieceToHistory*);
+  MovePicker(const Position&, Move, Depth, const ButterflyHistory*,
+                                           const CapturePieceToHistory*,
+                                           const PieceToHistory**,
+                                           Move,
+                                           const Move*);
   MovePicker(const Position&, Move, Depth, const ButterflyHistory*,
                                            const CapturePieceToHistory*,
                                            const PieceToHistory**,
                                            Square);
-  MovePicker(const Position&, Move, Depth, const ButterflyHistory*,
-                                           const LowPlyHistory*,
-                                           const CapturePieceToHistory*,
-                                           const PieceToHistory**,
-                                           Move,
-                                           const Move*,
-                                           int);
+  MovePicker(const Position&, Move, Value, const CapturePieceToHistory*);
   Move next_move(bool skipQuiets = false);
+
+  Bitboard threatenedPieces;
 
 private:
   template<PickType T, typename Pred> Move select(Pred);
@@ -145,7 +141,6 @@ private:
 
   const Position& pos;
   const ButterflyHistory* mainHistory;
-  const LowPlyHistory* lowPlyHistory;
   const CapturePieceToHistory* captureHistory;
   const PieceToHistory** continuationHistory;
   Move ttMove;
@@ -154,7 +149,6 @@ private:
   Square recaptureSquare;
   Value threshold;
   Depth depth;
-  int ply;
   ExtMove moves[MAX_MOVES];
 };
 

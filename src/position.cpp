@@ -1,6 +1,6 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2021 The Stockfish developers (see AUTHORS file)
+  Copyright (C) 2004-2023 The Stockfish developers (see AUTHORS file)
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 #include <cstring> // For std::memset, std::memcmp
 #include <iomanip>
 #include <sstream>
+#include <string_view>
 
 #include "bitboard.h"
 #include "misc.h"
@@ -46,7 +47,7 @@ namespace Zobrist {
 
 namespace {
 
-const string PieceToChar(" PNBRQK  pnbrqk");
+constexpr std::string_view PieceToChar(" PNBRQK  pnbrqk");
 
 constexpr Piece Pieces[] = { W_PAWN, W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
                              B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING };
@@ -129,7 +130,7 @@ void Position::init() {
   // Prepare the cuckoo tables
   std::memset(cuckoo, 0, sizeof(cuckoo));
   std::memset(cuckooMove, 0, sizeof(cuckooMove));
-  int count = 0;
+  [[maybe_unused]] int count = 0;
   for (Piece pc : Pieces)
       for (Square s1 = SQ_A1; s1 <= SQ_H8; ++s1)
           for (Square s2 = Square(s1 + 1); s2 <= SQ_H8; ++s2)
@@ -1013,9 +1014,9 @@ void Position::do_null_move(StateInfo& newSt) {
   }
 
   st->key ^= Zobrist::side;
+  ++st->rule50;
   prefetch(TT.first_entry(key()));
 
-  ++st->rule50;
   st->pliesFromNull = 0;
 
   sideToMove = ~sideToMove;
@@ -1054,7 +1055,10 @@ Key Position::key_after(Move m) const {
   if (captured)
       k ^= Zobrist::psq[captured][to];
 
-  return k ^ Zobrist::psq[pc][to] ^ Zobrist::psq[pc][from];
+  k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[pc][from];
+
+  return (captured || type_of(pc) == PAWN)
+      ? k : adjust_key50<true>(k);
 }
 
 
@@ -1099,10 +1103,12 @@ bool Position::see_ge(Move m, Value threshold) const {
       // Don't allow pinned pieces to attack as long as there are
       // pinners on their original square.
       if (pinners(~stm) & occupied)
+      {
           stmAttackers &= ~blockers_for_king(stm);
 
-      if (!stmAttackers)
-          break;
+          if (!stmAttackers)
+              break;
+      }
 
       res ^= 1;
 
