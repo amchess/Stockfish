@@ -1081,7 +1081,7 @@ Value Eval::evaluate(const Position& pos, int* complexity) {
 	  {	  
           *complexity = nnueComplexity;
       }
-	  optimism = (abs((nnue * scale) / 1024) < (int)((float)31 * (float)71./(float)19.)) ? (Value)(0) : (optimism * (272 + nnueComplexity) / 256);//71 is the initial position static internal score: to change based on the current net
+	  optimism = (abs((nnue * scale) / 1024) < 31) ? (Value)(0) : (optimism * (272 + nnueComplexity) / 256);
       v = (nnue * scale + optimism * (scale - 748)) / 1024;
   }
 
