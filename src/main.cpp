@@ -1,6 +1,6 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2023 The Stockfish developers (see AUTHORS file)
+  Copyright (C) 2004-2026 The Stockfish developers (see AUTHORS file)
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,37 +17,43 @@
 */
 
 #include <iostream>
+#include <memory>
+#include <utility>
 
-#include "bitboard.h"
-#include "endgame.h"
-#include "position.h"
-#include "psqt.h"
-#include "search.h"
-#include "syzygy/tbprobe.h"
-#include "thread.h"
-#include "tt.h"
+#include "attacks.h"
+#include "misc.h"
+#include "tune.h"
 #include "uci.h"
 
 using namespace Stockfish;
 
+#ifdef UNIVERSAL_BINARY
+namespace Stockfish {
+
+int main(int argc, char* argv[]);  // silence 'no previous declaration'
+
+__attribute__((used)) // keep main alive
+#endif
+
 int main(int argc, char* argv[]) {
+    std::cout << engine_info() << std::endl;
 
-  std::cout << engine_info() << std::endl;
+    Attacks::init();
 
-  CommandLine::init(argc, argv);
-  UCI::init(Options);
-  Tune::init();
-  PSQT::init();
-  Bitboards::init();
-  Position::init();
-  Bitbases::init();
-  Endgames::init();
-  Threads.set(size_t(Options["Threads"]));
-  Search::clear(); // After threads are up
-  Eval::NNUE::init();
+    auto cli = CommandLine(argc, argv);
+    auto uci = std::make_unique<UCIEngine>(std::move(cli));
 
-  UCI::loop(argc, argv);
+    Tune::init(uci->engine_options());
 
-  Threads.set(0);
-  return 0;
+    uci->loop();
+
+    return 0;
 }
+
+#ifdef UNIVERSAL_BINARY
+}  // namespace Stockfish
+
+    #ifdef UNIVERSAL_NEEDS_MAIN_SHIM
+int main(int argc, char* argv[]) { return Stockfish::main(argc, argv); }
+    #endif
+#endif

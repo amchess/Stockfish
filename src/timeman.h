@@ -1,6 +1,6 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2023 The Stockfish developers (see AUTHORS file)
+  Copyright (C) 2004-2026 The Stockfish developers (see AUTHORS file)
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,33 +19,55 @@
 #ifndef TIMEMAN_H_INCLUDED
 #define TIMEMAN_H_INCLUDED
 
+
+#include <limits>
+
 #include "misc.h"
-#include "search.h"
-#include "thread.h"
 
 namespace Stockfish {
 
-/// The TimeManagement class computes the optimal time to think depending on
-/// the maximum available time, the game move number and other parameters.
+class OptionsMap;
+enum Color : u8;
 
+namespace Search {
+struct LimitsType;
+}
+
+// The TimeManagement class computes the optimal time to think depending on
+// the maximum available time, the game move number, and other parameters.
 class TimeManagement {
-public:
-  void init(Search::LimitsType& limits, Color us, int ply);
-  TimePoint optimum() const { return optimumTime; }
-  TimePoint maximum() const { return maximumTime; }
-  TimePoint elapsed() const { return Search::Limits.npmsec ?
-                                     TimePoint(Threads.nodes_searched()) : now() - startTime; }
+   public:
+    void init(Search::LimitsType& limits,
+              Color               us,
+              int                 ply,
+              const OptionsMap&   options,
+              double&             originalTimeAdjust);
 
-  int64_t availableNodes; // When in 'nodes as time' mode
+    TimePoint optimum() const;
+    TimePoint maximum() const;
+    template<typename FUNC>
+    TimePoint elapsed(FUNC nodes) const {
+        return useNodesTime ? TimePoint(nodes()) : elapsed_time();
+    }
+    TimePoint elapsed_time() const { return now() - startTime; }
 
-private:
-  TimePoint startTime;
-  TimePoint optimumTime;
-  TimePoint maximumTime;
+    void clear();
+    void advance_nodes_time(i64 nodes);
+
+   private:
+    static constexpr TimePoint NoBound = std::numeric_limits<TimePoint>::max() / 2;
+
+    TimePoint startTime;
+    TimePoint optimumTime = NoBound;
+    TimePoint maximumTime = NoBound;
+
+    // Related to 'nodes as time' mode:
+    bool useNodesTime      = false;
+    i64  availableNodes    = -1;
+    int  previousMovesToGo = 0;
+    i64  cyclicBudget      = 0;
 };
 
-extern TimeManagement Time;
+}  // namespace Stockfish
 
-} // namespace Stockfish
-
-#endif // #ifndef TIMEMAN_H_INCLUDED
+#endif  // #ifndef TIMEMAN_H_INCLUDED

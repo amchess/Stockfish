@@ -1,6 +1,6 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2023 The Stockfish developers (see AUTHORS file)
+  Copyright (C) 2004-2026 The Stockfish developers (see AUTHORS file)
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,98 +19,405 @@
 #ifndef SEARCH_H_INCLUDED
 #define SEARCH_H_INCLUDED
 
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cassert>
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
+#include <cstring>
 
+#include "history.h"
 #include "misc.h"
-#include "movepick.h"
+#include "nnue/nnue_accumulator.h"
+#include "numa.h"
+#include "position.h"
+#include "score.h"
+#include "syzygy/tbprobe.h"
+#include "timeman.h"
 #include "types.h"
 
 namespace Stockfish {
 
-class Position;
+// Different node types, used as a template parameter
+enum NodeType {
+    NonPV,
+    PV,
+    Root
+};
+
+class TranspositionTable;
+class ThreadPool;
+class OptionsMap;
+
+namespace Eval::NNUE {
+class Network;
+}
 
 namespace Search {
 
+// syzygy_extend_pv() may lead to PVs longer than MAX_PLY
+struct RootPVMoves: public std::vector<Move> {
+    RootPVMoves() { reserve(MAX_PLY); }
+};
 
-/// Stack struct keeps track of the information we need to remember from nodes
-/// shallower and deeper in the tree during the search. Each search thread has
-/// its own array of Stack objects, indexed by the current ply.
+struct PVMoves {
+    Move  moves[MAX_PLY + 1];
+    usize length = 0;
 
+    Move*       begin() { return moves; }
+    const Move* begin() const { return moves; }
+    Move*       end() { return moves + length; }
+    const Move* end() const { return moves + length; }
+
+    Move&       operator[](usize index) { return moves[index]; }
+    const Move& operator[](usize index) const { return moves[index]; }
+
+    bool  empty() const { return length == 0; }
+    usize size() const { return length; }
+
+    void clear() { length = 0; }
+
+    void push_back(Move move) {
+        assert(length < MAX_PLY + 1);
+        moves[length++] = move;
+    }
+
+    void resize(usize newSize) {
+        assert(newSize <= length);
+        length = newSize;
+    }
+
+    void update(Move move, const PVMoves* childPv) {
+        assert(childPv == nullptr || childPv->size() <= MAX_PLY);
+        length = childPv ? childPv->length : 0;
+
+        if (childPv)
+            std::memcpy(moves + 1, childPv->moves, length * sizeof(Move));
+
+        moves[0] = move;
+        ++length;
+    }
+
+    PVMoves& operator=(const RootPVMoves& rhs) {
+        length = std::min(rhs.size(), usize(MAX_PLY));
+        std::memcpy(moves, rhs.data(), length * sizeof(Move));
+        return *this;
+    }
+};
+
+// Stack struct keeps track of the information we need to remember from nodes
+// shallower and deeper in the tree during the search. Each search thread has
+// its own array of Stack objects, indexed by the current ply.
 struct Stack {
-  Move* pv;
-  PieceToHistory* continuationHistory;
-  int ply;
-  Move currentMove;
-  Move excludedMove;
-  Move killers[2];
-  Value staticEval;
-  int statScore;
-  int moveCount;
-  bool inCheck;
-  bool ttPv;
-  bool ttHit;
-  int doubleExtensions;
-  int cutoffCnt;
+    PVMoves*                    pv;
+    PieceToHistory*             continuationHistory;
+    CorrectionHistory<PieceTo>* continuationCorrectionHistory;
+    int                         ply;
+    Move                        currentMove;
+    Move                        excludedMove;
+    Value                       staticEval;
+    int                         statScore;
+    int                         moveCount;
+    bool                        inCheck;
+    bool                        ttPv;
+    bool                        ttHit;
+    bool                        followPV;
+    int                         cutoffCnt;
+    int                         reduction;
+    int                         priorNMPFailHigh;
 };
 
 
-/// RootMove struct is used for moves at the root of the tree. For each root move
-/// we store a score and a PV (really a refutation in the case of moves which
-/// fail low). Score is normally set at -VALUE_INFINITE for all non-pv moves.
-
+// RootMove struct is used for moves at the root of the tree. For each root move
+// we store a score and a PV (really a refutation in the case of moves which
+// fail low). Score is normally set at -VALUE_INFINITE for all non-pv moves.
 struct RootMove {
 
-  explicit RootMove(Move m) : pv(1, m) {}
-  bool extract_ponder_from_tt(Position& pos);
-  bool operator==(const Move& m) const { return pv[0] == m; }
-  bool operator<(const RootMove& m) const { // Sort in descending order
-    return m.score != score ? m.score < score
-                            : m.previousScore < previousScore;
-  }
+    explicit RootMove(Move m) { pv.push_back(m); }
+    bool extract_ponder_from_tt(const TranspositionTable& tt, Position& pos);
+    bool is_inexact() const { return inexactLower || inexactUpper; }
+    bool is_exact_loss() const {
+        return score != -VALUE_INFINITE && is_loss(score) && !is_inexact();
+    }
+    void unset_inexact() { inexactLower = inexactUpper = false; }
+    bool operator==(const Move& m) const { return pv[0] == m; }
+    // Sort in descending order
+    bool operator<(const RootMove& m) const {
+        return m.score != score ? m.score < score : m.previousScore < previousScore;
+    }
 
-  Value score = -VALUE_INFINITE;
-  Value previousScore = -VALUE_INFINITE;
-  Value averageScore = -VALUE_INFINITE;
-  Value uciScore = -VALUE_INFINITE;
-  bool scoreLowerbound = false;
-  bool scoreUpperbound = false;
-  int selDepth = 0;
-  int tbRank = 0;
-  Value tbScore;
-  std::vector<Move> pv;
+    u64         effort           = 0;
+    Value       score            = -VALUE_INFINITE;
+    Value       previousScore    = -VALUE_INFINITE;
+    Value       averageScore     = -VALUE_INFINITE;
+    Value       meanSquaredScore = -VALUE_INFINITE * VALUE_INFINITE;
+    Value       uciScore         = -VALUE_INFINITE;
+    bool        inexactLower     = false;  // By default root scores are exact, unless flagged as a
+    bool        inexactUpper     = false;  // one-sided bound here. See also `enum Bound` in types.h
+    bool        previousScoreExact = false;
+    int         selDepth           = 0;
+    int         tbRank             = 0;
+    Value       tbScore;
+    RootPVMoves pv, previousPV;
 };
 
-typedef std::vector<RootMove> RootMoves;
+using RootMoves = std::vector<RootMove>;
 
 
-/// LimitsType struct stores information sent by GUI about available time to
-/// search the current move, maximum depth/time, or if we are in analysis mode.
-
+// LimitsType struct stores information sent by the caller about the analysis required.
 struct LimitsType {
 
-  LimitsType() { // Init explicitly due to broken value-initialization of non POD in MSVC
-    time[WHITE] = time[BLACK] = inc[WHITE] = inc[BLACK] = npmsec = movetime = TimePoint(0);
-    movestogo = depth = mate = perft = infinite = 0;
-    nodes = 0;
-  }
+    // Init explicitly due to broken value-initialization of non POD in MSVC
+    LimitsType() {
+        time[WHITE] = time[BLACK] = inc[WHITE] = inc[BLACK] = npmsec = movetime = TimePoint(0);
+        movestogo = depth = mate = perft = infinite = 0;
+        nodes                                       = 0;
+        ponderMode                                  = false;
+    }
 
-  bool use_time_management() const {
-    return time[WHITE] || time[BLACK];
-  }
+    bool use_time_management() const { return time[WHITE] || time[BLACK]; }
 
-  std::vector<Move> searchmoves;
-  TimePoint time[COLOR_NB], inc[COLOR_NB], npmsec, movetime, startTime;
-  int movestogo, depth, mate, perft, infinite;
-  int64_t nodes;
+    std::vector<std::string> searchmoves;
+    TimePoint                time[COLOR_NB], inc[COLOR_NB], npmsec, movetime, startTime;
+    int                      movestogo, depth, mate, perft, infinite;
+    u64                      nodes;
+    bool                     ponderMode;
 };
 
-extern LimitsType Limits;
 
-void init();
-void clear();
+// The UCI stores the uci options, thread pool, and transposition table.
+// This struct is used to easily forward data to the Search::Worker class.
+struct SharedState {
+    SharedState(const OptionsMap&                                        optionsMap,
+                ThreadPool&                                              threadPool,
+                TranspositionTable&                                      transpositionTable,
+                std::map<NumaIndex, SharedHistories>&                    sharedHists,
+                const LazyNumaReplicatedSystemWide<Eval::NNUE::Network>& net) :
+        options(optionsMap),
+        threads(threadPool),
+        tt(transpositionTable),
+        sharedHistories(sharedHists),
+        network(net) {}
 
-} // namespace Search
+    const OptionsMap&                                        options;
+    ThreadPool&                                              threads;
+    TranspositionTable&                                      tt;
+    std::map<NumaIndex, SharedHistories>&                    sharedHistories;
+    const LazyNumaReplicatedSystemWide<Eval::NNUE::Network>& network;
+};
 
-} // namespace Stockfish
+class Worker;
 
-#endif // #ifndef SEARCH_H_INCLUDED
+struct InfoShort {
+    int   depth;
+    Score score;
+};
+
+struct InfoFull: InfoShort {
+    int              selDepth;
+    usize            multiPV;
+    std::string_view wdl;
+    std::string_view bound;
+    usize            timeMs;
+    usize            nodes;
+    usize            nps;
+    usize            tbHits;
+    std::string_view pv;
+    int              hashfull;
+};
+
+struct InfoIteration {
+    int              depth;
+    std::string_view currmove;
+    usize            currmovenumber;
+};
+
+// Skill structure is used to implement strength limit. If we have a UCI_Elo,
+// we convert it to an appropriate skill level, anchored to the Stash engine.
+// This method is based on a fit of the Elo results for games played between
+// Stockfish at various skill levels and various versions of the Stash engine.
+// Skill 0 .. 19 now covers CCRL Blitz Elo from 1320 to 3190, approximately
+// Reference: https://github.com/vondele/Stockfish/commit/a08b8d4e9711c2
+struct Skill {
+    // Lowest and highest Elo ratings used in the skill level calculation
+    constexpr static int LowestElo  = 1320;
+    constexpr static int HighestElo = 3190;
+
+    Skill(int skill_level, int uci_elo) {
+        if (uci_elo)
+        {
+            double e = double(uci_elo - LowestElo) / (HighestElo - LowestElo);
+            level = std::clamp((((37.2473 * e - 40.8525) * e + 22.2943) * e - 0.311438), 0.0, 19.0);
+        }
+        else
+            level = double(skill_level);
+    }
+    bool enabled() const { return level < 20.0; }
+    bool time_to_pick(Depth depth) const { return depth == 1 + int(level); }
+    Move pick_best(const RootMoves&, usize multiPV);
+
+    double level;
+    Move   best = Move::none();
+};
+
+// SearchManager manages the search from the main thread. It is responsible for
+// keeping track of the time, and storing data strictly related to the main thread.
+class SearchManager {
+   public:
+    using UpdateShort    = std::function<void(const InfoShort&)>;
+    using UpdateFull     = std::function<void(const InfoFull&)>;
+    using UpdateIter     = std::function<void(const InfoIteration&)>;
+    using UpdateBestmove = std::function<void(std::string_view, std::string_view)>;
+    using UpdateStart    = std::function<void()>;
+
+    struct UpdateContext {
+        UpdateShort    onUpdateNoMoves;
+        UpdateFull     onUpdateFull;
+        UpdateIter     onIter;
+        UpdateBestmove onBestmove;
+        UpdateStart    onStart;
+    };
+
+
+    SearchManager(const UpdateContext& updateContext) :
+        updates(updateContext) {}
+
+    void check_time(Search::Worker& worker);
+
+    void output_pv(Search::Worker&           worker,
+                   const ThreadPool&         threads,
+                   const TranspositionTable& tt,
+                   Depth                     depth);
+
+    Stockfish::TimeManagement tm;
+    double                    originalTimeAdjust;
+    int                       callsCnt;
+    std::atomic_bool          ponder;
+
+    std::array<Value, 4> iterValue;
+    double               previousTimeReduction;
+    Value                bestPreviousScore;
+    Value                bestPreviousAverageScore;
+    bool                 stopOnPonderhit;
+
+    const UpdateContext& updates;
+};
+
+// Search::Worker is the class that does the actual search.
+// It is instantiated once per thread, and it is responsible for keeping track
+// of the search history, and storing data required for the search.
+class Worker {
+   public:
+    Worker(
+      SharedState&, std::unique_ptr<SearchManager>, usize, usize, usize, NumaReplicatedAccessToken);
+
+    // Reset histories, usually before a new game.
+    void clear();
+
+    // Called when the program receives the UCI 'go' command.
+    // It searches from the root position and outputs the "bestmove".
+    void start_searching();
+
+    bool is_mainthread() const { return threadIdx == 0; }
+
+    void ensure_network_replicated();
+
+    // Public because they need to be updatable by the stats
+    ButterflyHistory mainHistory;
+    LowPlyHistory    lowPlyHistory;
+
+    CapturePieceToHistory           captureHistory;
+    CorrectionHistory<Continuation> continuationCorrectionHistory;
+
+    TTMoveHistory    ttMoveHistory;
+    SharedHistories& sharedHistory;
+    ContinuationHistory (&continuationHistory)[2][2];
+
+   private:
+    bool iterative_deepening();
+
+    void do_move(Position&    pos,
+                 const Move   move,
+                 StateInfo&   st,
+                 const bool   givesCheck,
+                 const bool   capture,
+                 Stack* const ss);
+    void do_null_move(Position& pos, StateInfo& st, Stack* const ss);
+    void undo_move(Position& pos, const Move move);
+    void undo_null_move(Position& pos);
+
+    // This is the main search function, for both PV and non-PV nodes
+    template<NodeType nodeType>
+    Value
+    search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, const bool cutNode);
+
+    // Quiescence search function, which is called by the main search
+    template<NodeType nodeType>
+    Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta);
+
+    int reduction(bool i, Depth d, int mn) const;
+
+    // Pointer to the search manager, only allowed to be called by the main thread
+    SearchManager* main_manager() const {
+        assert(threadIdx == 0);
+        assert(manager.get() != nullptr);
+        return manager.get();
+    }
+
+    TimePoint elapsed() const;
+
+    Value evaluate(const Position&);
+
+    LimitsType limits;
+
+    usize              pvIdx, pvLast;
+    RelaxedAtomic<u64> nodes, tbHits, bestMoveChanges;
+    int                selDepth, nmpMinPly;
+
+    Value optimism[COLOR_NB];
+
+    Position  rootPos;
+    StateInfo rootState;
+    RootMoves rootMoves;
+    Depth     rootDepth;
+    bool      seekMate = false;
+
+    PVMoves lastIterationIdxPV;
+
+    usize                     threadIdx, numaThreadIdx, numaTotal;
+    NumaReplicatedAccessToken numaAccessToken;
+
+    // The main thread has a SearchManager, the others have a nullptr
+    std::unique_ptr<SearchManager> manager;
+
+    Tablebases::Config tbConfig;
+
+    const OptionsMap&                                        options;
+    ThreadPool&                                              threads;
+    TranspositionTable&                                      tt;
+    const LazyNumaReplicatedSystemWide<Eval::NNUE::Network>& network;
+
+    // Used by NNUE
+    Eval::NNUE::AccumulatorStack  accumulatorStack;
+    Eval::NNUE::AccumulatorCaches refreshTable;
+
+    friend class Stockfish::ThreadPool;
+    friend class SearchManager;
+};
+
+struct ConthistBonus {
+    int index;
+    int weight;
+};
+
+
+}  // namespace Search
+
+}  // namespace Stockfish
+
+#endif  // #ifndef SEARCH_H_INCLUDED

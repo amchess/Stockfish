@@ -1,6 +1,6 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
-  Copyright (C) 2004-2023 The Stockfish developers (see AUTHORS file)
+  Copyright (C) 2004-2026 The Stockfish developers (see AUTHORS file)
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #define EVALUATE_H_INCLUDED
 
 #include <string>
-#include <optional>
 
 #include "types.h"
 
@@ -30,33 +29,27 @@ class Position;
 
 namespace Eval {
 
-  std::string trace(Position& pos);
-  Value evaluate(const Position& pos, int* complexity = nullptr);
+// The default net name MUST follow the format nn-[SHA256 first 12 digits].nnue
+// for the build process (profile-build and fishtest) to work. Do not change the
+// name of the macro or the location where this macro is defined, as it is used
+// in the Makefile/Fishtest.
+#define EvalFileDefaultName "nn-68752b755c93.nnue"
 
-  extern bool useNNUE;
-  extern std::string currentEvalFileName;
+namespace NNUE {
+class Network;
+struct AccumulatorCaches;
+class AccumulatorStack;
+}
 
-  // The default net name MUST follow the format nn-[SHA256 first 12 digits].nnue
-  // for the build process (profile-build and fishtest) to work. Do not change the
-  // name of the macro, as it is used in the Makefile.
-  #define EvalFileDefaultName   "nn-1337b1adec5b.nnue"
+std::string trace(Position& pos, const Eval::NNUE::Network& network);
 
-  namespace NNUE {
+Value evaluate(const NNUE::Network&           network,
+               const Position&                pos,
+               Eval::NNUE::AccumulatorStack&  accumulators,
+               Eval::NNUE::AccumulatorCaches& caches,
+               int                            optimism);
+}  // namespace Eval
 
-    std::string trace(Position& pos);
-    Value evaluate(const Position& pos, bool adjusted = false, int* complexity = nullptr);
+}  // namespace Stockfish
 
-    void init();
-    void verify();
-
-    bool load_eval(std::string name, std::istream& stream);
-    bool save_eval(std::ostream& stream);
-    bool save_eval(const std::optional<std::string>& filename);
-
-  } // namespace NNUE
-
-} // namespace Eval
-
-} // namespace Stockfish
-
-#endif // #ifndef EVALUATE_H_INCLUDED
+#endif  // #ifndef EVALUATE_H_INCLUDED
